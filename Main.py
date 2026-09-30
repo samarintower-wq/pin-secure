@@ -1339,223 +1339,135 @@ def weather(user):
 @app.post("/api/ai/image")
 @auth_required
 def ai_image(user):
-
     data = request.get_json() or {}
-
-    prompt = (
-        data.get("prompt", "")
-        .strip()
-    )
+    prompt = str(data.get("prompt", "")).strip()
 
     if not prompt:
-        return jsonify({
-            "error": "Пустой prompt"
-        }), 400
+        return jsonify({"error": "Пустой prompt"}), 400
 
-    if (
-        not CLOUDFLARE_API_TOKEN
-        or not CLOUDFLARE_ACCOUNT_ID
-    ):
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
         return jsonify({
-            "error":
-                "Cloudflare AI не настроен в Render"
+            "error": "Cloudflare AI не настроен"
         }), 500
 
-    # =====================================================
-    # 1. Переводим запрос пользователя через Groq
-    # =====================================================
-
+    # 1. Переводим запрос на английский через Groq
     try:
-
-        english_prompt = groq_chat([
-
+        en_prompt = groq_chat([
             {
                 "role": "system",
-
                 "content": (
-                    "Translate the user's image request "
-                    "into a detailed English image-generation "
-                    "prompt. Return only the prompt."
+                    "Translate the user's image request into a "
+                    "detailed English image generation prompt. "
+                    "Return only the prompt."
                 )
             },
-
             {
                 "role": "user",
-
                 "content": prompt
             }
-
         ])
-
-    except Exception as e:
-
-        app.logger.warning(
-            "Groq image prompt translation failed: %s",
-            e
-        )
-
-        # Если Groq недоступен,
-        # отправляем исходный prompt.
-        english_prompt = prompt
-
-    # =====================================================
-    # 2. Запрос изображения к Cloudflare AI
-    # =====================================================
+    except Exception:
+        en_prompt = prompt
 
     url = (
-        "https://api.cloudflare.com/client/v4/"
-        f"accounts/{CLOUDFLARE_ACCOUNT_ID}"
-        "/ai/run/"
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{CLOUDFLARE_ACCOUNT_ID}/ai/run/"
         f"{CLOUDFLARE_IMAGE_MODEL}"
     )
 
     try:
-
         response = requests.post(
-
             url,
-
             headers={
                 "Authorization":
                     f"Bearer {CLOUDFLARE_API_TOKEN}",
-
                 "Content-Type":
-                    "application/json"
+                    "application/json",
+                "Accept":
+                    "image/png"
             },
-
             json={
-                "prompt": english_prompt
+                "prompt": en_prompt
             },
-
             timeout=120
         )
 
     except requests.RequestException as e:
-
-        app.logger.exception(
-            "Cloudflare request failed"
-        )
-
         return jsonify({
-            "error":
-                "Ошибка соединения с Cloudflare",
-
-            "details":
-                str(e)
+            "error": "Ошибка соединения с Cloudflare",
+            "details": str(e)
         }), 502
-
-    # =====================================================
-    # 3. Проверяем ответ Cloudflare
-    # =====================================================
 
     if not response.ok:
+        try:
+            details = response.json()
+        except Exception:
+            details = response.text[:1000]
 
         return jsonify({
-
-            "error":
-                "Cloudflare image generation failed",
-
-            "status":
-                response.status_code,
-
-            "details":
-                response.text[:1500]
-
+            "error": "Cloudflare image generation failed",
+            "status": response.status_code,
+            "details": details
         }), 502
 
-    # =====================================================
-    # 4. Получаем изображение
-    # =====================================================
-
     content_type = (
-        response.headers
-        .get(
-            "content-type",
-            ""
+        response.headers.get(
+            "Content-Type",
+            "image/png"
         )
-        .lower()
-    )
+    ).lower()
 
-    image_url = None
-
-    # Cloudflare может вернуть
-    # непосредственно бинарный файл изображения.
-    if "image" in content_type:
+    # Cloudflare вернул непосредственно картинку
+    if content_type.startswith("image/"):
 
         encoded = base64.b64encode(
             response.content
-        ).decode()
+        ).decode("ascii")
 
         image_url = (
-            f"data:{content_type};base64,"
-            f"{encoded}"
+            f"data:{content_type};base64,{encoded}"
         )
-
-    else:
-
-        try:
-
-            body = response.json()
-
-        except Exception:
-
-            return jsonify({
-
-                "error":
-                    "Cloudflare вернул неизвестный формат ответа",
-
-                "details":
-                    response.text[:1500]
-
-            }), 502
-
-        result = body.get(
-            "result",
-            {}
-        )
-
-        if isinstance(result, dict):
-
-            image_url = (
-                result.get("image")
-                or result.get("output")
-                or result.get("url")
-            )
-
-        else:
-
-            image_url = result
-
-    # =====================================================
-    # 5. Проверяем наличие изображения
-    # =====================================================
-
-    if not image_url:
 
         return jsonify({
+            "prompt": en_prompt,
+            "image": image_url
+        })
 
-            "error":
-                "Cloudflare не вернул изображение",
-
-            "details":
-                response.text[:1000]
-
+    # Иногда API может вернуть JSON
+    try:
+        body = response.json()
+    except Exception:
+        return jsonify({
+            "error": "Cloudflare вернул неизвестный формат",
+            "content_type": content_type
         }), 502
 
-    # =====================================================
-    # 6. Возвращаем изображение клиенту
-    # =====================================================
+    result = body.get("result")
+
+    if isinstance(result, dict):
+
+        image_url = (
+            result.get("image") or
+            result.get("image_url") or
+            result.get("url")
+        )
+
+        if image_url:
+            return jsonify({
+                "prompt": en_prompt,
+                "image": image_url
+            })
+
+    if isinstance(result, str):
+        return jsonify({
+            "prompt": en_prompt,
+            "image": result
+        })
 
     return jsonify({
-
-        "prompt":
-            english_prompt,
-
-        "image":
-            image_url
-
-    })
-
+        "error": "Cloudflare не вернул изображение",
+        "details": body
+    }), 502
 
 # =========================================================
 # SITE ACTION
