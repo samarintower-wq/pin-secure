@@ -35,7 +35,10 @@ if db is not None:
     users.create_index("username", unique=True)
     mailboxes.create_index("address", unique=True)
     messages.create_index([("owner_id", ASCENDING), ("created_at", DESCENDING)])
-    messages.create_index("delete_at", ASCENDING)
+    try:
+        messages.create_index([("delete_at", ASCENDING)])
+    except Exception as e:
+        print(f"MongoDB index warning: {e}")
     ai_messages.create_index([("owner_id", ASCENDING), ("created_at", ASCENDING)])
 
 def jsonable(doc):
