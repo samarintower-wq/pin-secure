@@ -1210,153 +1210,147 @@ function renderWeather(weather) {
    WEATHER REQUEST
    ========================================================= */
 
-async function getWeather(originalText) {
-
-    addBubble(
-        originalText,
-        "user"
-    );
-
-    $("#chatInput").value = "";
-
-    addHTMLBubble(`
-        <div class="loading">
-            Получаю данные о погоде…
-        </div>
-    `);
-
-    const loadingBubble =
-        $("#chat")
-            .querySelector(
-                ".bubble:last-child"
-            );
+async function getWeather(city = null, lat = null, lon = null) {
 
     try {
 
-        const city =
-            extractWeatherCity(
-                originalText
-            );
+        let url = "/api/weather";
 
-        let data;
 
-        /*
-         * Если пользователь указал город,
-         * используем его.
-         */
+        /* =================================================
+           КООРДИНАТЫ
+           ================================================= */
 
-        if (city) {
+        if (
+            lat !== null &&
+            lon !== null
+        ) {
 
-            data = await api(
-                "/weather?city=" +
-                encodeURIComponent(city)
-            );
-
+            url =
+                "/api/weather?lat=" +
+                encodeURIComponent(lat) +
+                "&lon=" +
+                encodeURIComponent(lon);
         }
 
-        /*
-         * Если город не указан,
-         * пытаемся получить координаты устройства.
-         */
+
+        /* =================================================
+           НАЗВАНИЕ МЕСТА
+           ================================================= */
+
+        else if (city) {
+
+            url =
+                "/api/weather?city=" +
+                encodeURIComponent(city);
+        }
+
+
+        /* =================================================
+           GPS
+           ================================================= */
 
         else {
 
-            try {
+            if (
+                !navigator.geolocation
+            ) {
 
-                const position =
-                    await getCurrentPosition();
-
-                data = await api(
-                    "/weather?lat=" +
-                    encodeURIComponent(
-                        position.lat
-                    ) +
-                    "&lon=" +
-                    encodeURIComponent(
-                        position.lon
-                    )
+                throw new Error(
+                    "Ваш браузер не поддерживает GPS"
                 );
-
-            } catch (geoError) {
-
-                /*
-                 * Если пользователь запретил
-                 * геолокацию — предлагаем город.
-                 */
-
-                const manualCity =
-                    prompt(
-                        "Не удалось определить ваше местоположение.\n\n" +
-                        "Введите город для получения погоды:"
-                    );
-
-                if (!manualCity) {
-
-                    throw geoError;
-
-                }
-
-                data = await api(
-                    "/weather?city=" +
-                    encodeURIComponent(
-                        manualCity.trim()
-                    )
-                );
-
             }
 
+
+            $("#orbStatus").textContent =
+                "Определяю ваше местоположение…";
+
+
+            const position =
+                await new Promise(
+                    (resolve, reject) => {
+
+                        navigator.geolocation.getCurrentPosition(
+                            resolve,
+                            reject,
+                            {
+                                enableHighAccuracy:
+                                    true,
+
+                                timeout:
+                                    15000,
+
+                                maximumAge:
+                                    300000
+                            }
+                        );
+                    }
+                );
+
+
+            lat =
+                position.coords.latitude;
+
+            lon =
+                position.coords.longitude;
+
+
+            url =
+                "/api/weather?lat=" +
+                encodeURIComponent(lat) +
+                "&lon=" +
+                encodeURIComponent(lon);
         }
 
-        if (loadingBubble) {
-            loadingBubble.remove();
+
+        /* =================================================
+           ЗАПРОС
+           ================================================= */
+
+        const response =
+            await apiFetch(url);
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Не удалось получить погоду"
+            );
         }
+
+
+        console.log(
+            "Weather:",
+            data
+        );
+
 
         renderWeather(data);
 
-        /*
-         * Озвучиваем результат.
-         */
 
-        const weatherCity =
-            data?.name ||
-            "указанном месте";
+        return data;
 
-        const description =
-            data?.weather?.[0]?.description ||
-            "";
-
-        const temperature =
-            Math.round(
-                Number(
-                    data?.main?.temp ?? 0
-                )
-            );
-
-        speak(
-            `Сейчас в ${
-                weatherCity
-            } ${
-                temperature
-            } градусов. ${
-                description
-            }.`
-        );
 
     } catch (error) {
 
-        if (loadingBubble) {
-            loadingBubble.remove();
-        }
-
-        addBubble(
-            "Ошибка получения погоды: " +
-            error.message,
-            "ai"
+        console.error(
+            "Weather error:",
+            error
         );
 
+
+        addBubble(
+            "ai",
+            "🌦️ Не удалось получить погоду: " +
+            error.message
+        );
     }
 }
-
 
 /* =========================================================
    NORMAL AI
