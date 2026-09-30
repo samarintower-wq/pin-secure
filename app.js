@@ -1438,6 +1438,30 @@ function extractWeatherLocation(text) {
     return null;
 }
 
+function extractCoordinates(text) {
+    const match = text.match(
+        /(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)/
+    );
+
+    if (!match) return null;
+
+    const lat = Number(match[1]);
+    const lon = Number(match[2]);
+
+    if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180
+    ) {
+        return null;
+    }
+
+    return { lat, lon };
+}
+
 /* =========================================================
    NORMAL AI
    ========================================================= */
