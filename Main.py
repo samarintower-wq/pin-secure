@@ -1425,8 +1425,7 @@ def weather(user):
 
     try:
 
-        weather_data =
-            weather_response.json()
+        weather_data = weather_response.json()
 
     except Exception:
 
