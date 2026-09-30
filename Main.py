@@ -292,6 +292,42 @@ def index():
         "index.html"
     )
 
+# =========================================================
+# STATIC FILES
+# =========================================================
+
+@app.get("/style.css")
+def style_css():
+    return send_from_directory(
+        BASE_DIR,
+        "style.css",
+        mimetype="text/css"
+    )
+
+
+@app.get("/app.js")
+def app_js():
+    return send_from_directory(
+        BASE_DIR,
+        "app.js",
+        mimetype="application/javascript"
+    )
+
+
+@app.get("/favicon.ico")
+def favicon():
+    favicon_path = os.path.join(
+        BASE_DIR,
+        "favicon.ico"
+    )
+
+    if os.path.exists(favicon_path):
+        return send_from_directory(
+            BASE_DIR,
+            "favicon.ico"
+        )
+
+    return "", 204
 
 @app.get("/api/health")
 def health():
