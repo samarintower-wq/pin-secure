@@ -530,44 +530,30 @@ $("#compose").onclick = async () => {
    CHAT UI
    ========================================================= */
 
-function addBubble(
-    text,
-    type
-) {
+function addBubble(type, text) {
+    const chat = document.querySelector("#chat");
 
-    $("#chat").insertAdjacentHTML(
-        "beforeend",
+    if (!chat) {
+        console.error("Chat container #chat not found");
+        return;
+    }
 
-        `
-        <div class="bubble ${type}">
-            ${esc(text)}
-        </div>
-        `
+    const bubble = document.createElement("div");
+
+    bubble.className =
+        "bubble " +
+        (type === "user" ? "user" : "ai");
+
+    bubble.textContent = String(
+        text ?? ""
     );
 
-    $("#chat").scrollTop =
-        $("#chat").scrollHeight;
+    chat.appendChild(bubble);
+
+    chat.scrollTop = chat.scrollHeight;
+
+    return bubble;
 }
-
-
-function addHTMLBubble(
-    html
-) {
-
-    $("#chat").insertAdjacentHTML(
-        "beforeend",
-
-        `
-        <div class="bubble ai">
-            ${html}
-        </div>
-        `
-    );
-
-    $("#chat").scrollTop =
-        $("#chat").scrollHeight;
-}
-
 
 /* =========================================================
    TEXT TO SPEECH
