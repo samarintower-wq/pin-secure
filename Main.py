@@ -307,6 +307,19 @@ def ai_image(user):
 def action_create_mail(user):
     return create_pinmail(user)
 
+@app.errorhandler(404)
+def not_found(e):
+    app.logger.warning(
+        "404: %s %s",
+        request.method,
+        request.path
+    )
+    return jsonify({
+        "error": "Not Found",
+        "path": request.path,
+        "method": request.method
+    }), 404
+
 @app.errorhandler(Exception)
 def error(e):
     app.logger.exception(e)
