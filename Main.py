@@ -1237,36 +1237,34 @@ def ai_history(user):
 def weather(user):
 
     if not OPENWEATHER_API_KEY:
-
         return jsonify({
-            "error":
-                "OPENWEATHER_API_KEY не задан в Render"
+            "error": "OPENWEATHER_API_KEY не задан в Render"
         }), 500
 
-    lat = request.args.get("lat")
-    lon = request.args.get("lon")
-    city = request.args.get("city")
+    lat = request.args.get("lat", "").strip()
+    lon = request.args.get("lon", "").strip()
+    city = request.args.get("city", "").strip()
 
     params = {
-        "appid":
-            OPENWEATHER_API_KEY,
-
-        "units":
-            "metric",
-
-        "lang":
-            "ru"
+        "appid": OPENWEATHER_API_KEY,
+        "units": "metric",
+        "lang": "ru"
     }
 
-    # Погода по координатам.
+    # Приоритет координатам
     if lat and lon:
 
-        params.update({
-            "lat": lat,
-            "lon": lon
-        })
+        try:
+            float(lat)
+            float(lon)
+        except ValueError:
+            return jsonify({
+                "error": "Некорректные координаты"
+            }), 400
 
-    # Погода по названию города.
+        params["lat"] = lat
+        params["lon"] = lon
+
     elif city:
 
         params["q"] = city
@@ -1274,8 +1272,7 @@ def weather(user):
     else:
 
         return jsonify({
-            "error":
-                "Укажите city или lat/lon"
+            "error": "Не указан город или координаты"
         }), 400
 
     try:
@@ -1288,16 +1285,9 @@ def weather(user):
 
     except requests.RequestException as e:
 
-        app.logger.exception(
-            "OpenWeather request failed"
-        )
-
         return jsonify({
-            "error":
-                "Ошибка соединения с OpenWeather",
-
-            "details":
-                str(e)
+            "error": "Ошибка соединения с OpenWeather",
+            "details": str(e)
         }), 502
 
     if not response.ok:
@@ -1308,29 +1298,22 @@ def weather(user):
             details = response.text[:1000]
 
         return jsonify({
-            "error":
-                "OpenWeather вернул ошибку",
-
-            "details":
-                details
+            "error": "OpenWeather вернул ошибку",
+            "status": response.status_code,
+            "details": details
         }), response.status_code
 
     try:
 
-        result = response.json()
+        data = response.json()
 
-    except Exception as e:
+    except Exception:
 
         return jsonify({
-            "error":
-                "OpenWeather вернул некорректный JSON",
-
-            "details":
-                str(e)
+            "error": "OpenWeather вернул некорректный JSON"
         }), 502
 
-    return jsonify(result)
-
+    return jsonify(data)
 
 # =========================================================
 # AI IMAGE GENERATION
