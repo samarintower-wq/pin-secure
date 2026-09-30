@@ -530,6 +530,15 @@ $("#compose").onclick = async () => {
    CHAT UI
    ========================================================= */
 
+function escapeHTML(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 function addHTMLBubble(type, html) {
     const chat = document.querySelector("#chat");
 
