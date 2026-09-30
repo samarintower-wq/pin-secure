@@ -3,55 +3,42 @@ const $$ = s => document.querySelectorAll(s);
 
 let token = localStorage.getItem("pin_token");
 
-const state = {
+let state = {
     user: null,
     mailboxes: [],
     current: null
 };
 
-let recognition = null;
-let recognitionRunning = false;
-
-let audioContext = null;
-let analyser = null;
-let microphoneSource = null;
-let audioStream = null;
-let volumeAnimation = null;
-let silenceTimer = null;
-
-let voiceSession = false;
-let finalTranscript = "";
-let lastTranscript = "";
-
 
 /* =========================================================
    API
-========================================================= */
+   ========================================================= */
 
 async function api(path, options = {}) {
-    const headers = {
+
+    options.headers = {
+        "Content-Type": "application/json",
         ...(options.headers || {})
     };
 
-    if (options.body && !headers["Content-Type"]) {
-        headers["Content-Type"] = "application/json";
-    }
-
     if (token) {
-        headers.Authorization = "Bearer " + token;
+        options.headers.Authorization =
+            "Bearer " + token;
     }
 
-    const response = await fetch("/api" + path, {
-        ...options,
-        headers
-    });
+    const response = await fetch(
+        "/api" + path,
+        options
+    );
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response
+        .json()
+        .catch(() => ({}));
 
     if (!response.ok) {
         throw new Error(
             data.error ||
-            `Ошибка сервера: ${response.status}`
+            "Произошла ошибка"
         );
     }
 
@@ -61,43 +48,60 @@ async function api(path, options = {}) {
 
 /* =========================================================
    AUTH
-========================================================= */
+   ========================================================= */
 
 function showAuth(type) {
+
     $$(".tab").forEach(tab => {
+
         tab.classList.toggle(
             "active",
             tab.dataset.auth === type
         );
+
     });
 
-    $("#loginForm").hidden = type !== "login";
-    $("#registerForm").hidden = type !== "register";
+    $("#loginForm").hidden =
+        type !== "login";
+
+    $("#registerForm").hidden =
+        type !== "register";
+
     $("#authError").textContent = "";
 }
 
 
 $$(".tab").forEach(tab => {
+
     tab.onclick = () => {
-        showAuth(tab.dataset.auth);
+        showAuth(
+            tab.dataset.auth
+        );
     };
+
 });
 
 
 $("#loginForm").onsubmit = async event => {
+
     event.preventDefault();
 
-    $("#authError").textContent = "Выполняется вход…";
-
     try {
-        const data = await api("/auth/login", {
-            method: "POST",
-            body: JSON.stringify(
-                Object.fromEntries(
-                    new FormData(event.target)
+
+        const data = await api(
+            "/auth/login",
+            {
+                method: "POST",
+
+                body: JSON.stringify(
+                    Object.fromEntries(
+                        new FormData(
+                            event.target
+                        )
+                    )
                 )
-            )
-        });
+            }
+        );
 
         token = data.token;
 
@@ -109,27 +113,34 @@ $("#loginForm").onsubmit = async event => {
         await start();
 
     } catch (error) {
+
         $("#authError").textContent =
             error.message;
+
     }
 };
 
 
 $("#registerForm").onsubmit = async event => {
+
     event.preventDefault();
 
-    $("#authError").textContent =
-        "Создание аккаунта…";
-
     try {
-        const data = await api("/auth/register", {
-            method: "POST",
-            body: JSON.stringify(
-                Object.fromEntries(
-                    new FormData(event.target)
+
+        const data = await api(
+            "/auth/register",
+            {
+                method: "POST",
+
+                body: JSON.stringify(
+                    Object.fromEntries(
+                        new FormData(
+                            event.target
+                        )
+                    )
                 )
-            )
-        });
+            }
+        );
 
         token = data.token;
 
@@ -141,45 +152,56 @@ $("#registerForm").onsubmit = async event => {
         await start();
 
     } catch (error) {
+
         $("#authError").textContent =
             error.message;
+
     }
 };
 
 
 /* =========================================================
-   APPLICATION START
-========================================================= */
+   START
+   ========================================================= */
 
 async function start() {
 
     if (!token) {
+
         $("#auth").hidden = false;
         $("#app").hidden = true;
+
         return;
     }
 
     try {
 
-        const data = await api("/me");
+        const data =
+            await api("/me");
 
-        state.user = data.user;
+        state.user =
+            data.user;
 
         $("#auth").hidden = true;
         $("#app").hidden = false;
 
-        const passport =
-            data.user.passport || {};
-
         $("#profile").innerHTML = `
             <b>
-                ${esc(passport.first_name)}
-                ${esc(passport.last_name)}
+                ${esc(
+                    data.user.passport.first_name
+                )}
+                ${esc(
+                    data.user.passport.last_name
+                )}
             </b>
             <br>
-            ${esc(passport.position)}
+            ${esc(
+                data.user.passport.position
+            )}
             <br>
-            ${esc(passport.rank)}
+            ${esc(
+                data.user.passport.rank
+            )}
         `;
 
         await loadMailboxes();
@@ -187,38 +209,39 @@ async function start() {
 
     } catch (error) {
 
-        console.error(error);
-
         localStorage.removeItem(
             "pin_token"
         );
 
         token = null;
 
-        $("#auth").hidden = false;
-        $("#app").hidden = true;
+        await start();
     }
 }
 
 
 /* =========================================================
    NAVIGATION
-========================================================= */
+   ========================================================= */
 
 function openPage(page) {
 
     $$(".page").forEach(element => {
+
         element.classList.toggle(
             "active",
             element.id === page
         );
+
     });
 
     $$(".nav-btn").forEach(button => {
+
         button.classList.toggle(
             "active",
             button.dataset.page === page
         );
+
     });
 
     if (page === "mail") {
@@ -228,19 +251,19 @@ function openPage(page) {
 
 
 $$(".nav-btn").forEach(button => {
+
     button.onclick = () => {
-        openPage(button.dataset.page);
+
+        openPage(
+            button.dataset.page
+        );
+
     };
+
 });
 
 
-/* =========================================================
-   LOGOUT
-========================================================= */
-
 $("#logout").onclick = () => {
-
-    stopVoice();
 
     localStorage.removeItem(
         "pin_token"
@@ -254,7 +277,7 @@ $("#logout").onclick = () => {
 
 /* =========================================================
    PINMAIL
-========================================================= */
+   ========================================================= */
 
 async function loadMailboxes() {
 
@@ -264,13 +287,15 @@ async function loadMailboxes() {
             await api("/pinmail");
 
         state.mailboxes =
-            data.mailboxes || [];
+            data.mailboxes;
 
         if (!state.mailboxes.length) {
 
             $("#mailboxes").innerHTML = `
                 <div class="card">
-                    <h3>У вас пока нет Pinmail</h3>
+                    <h3>
+                        У вас пока нет Pinmail
+                    </h3>
 
                     <p class="muted">
                         Создайте первый адрес
@@ -289,17 +314,20 @@ async function loadMailboxes() {
 
                     const selected =
                         state.current &&
-                        state.current._id === mailbox._id
+                        state.current._id ===
+                            mailbox._id
                             ? "selected"
                             : "";
 
                     return `
                         <div
                             class="mailbox ${selected}"
-                            onclick="selectMailbox('${escAttr(mailbox._id)}')"
+                            onclick="selectMailbox('${mailbox._id}')"
                         >
                             <b>
-                                ${esc(mailbox.address)}
+                                ${esc(
+                                    mailbox.address
+                                )}
                             </b>
 
                             <br>
@@ -309,24 +337,24 @@ async function loadMailboxes() {
                             </span>
                         </div>
                     `;
+
                 })
                 .join("");
 
     } catch (error) {
 
-        console.error(
-            "Pinmail error:",
-            error
-        );
+        console.error(error);
+
     }
 }
 
 
 $("#newMail").onclick = async () => {
 
-    const username = prompt(
-        "Введите желаемый адрес без @pinmail.pin:"
-    );
+    const username =
+        prompt(
+            "Введите желаемый адрес без @pinmail.pin:"
+        );
 
     if (!username) {
         return;
@@ -334,18 +362,25 @@ $("#newMail").onclick = async () => {
 
     try {
 
-        await api("/pinmail/create", {
-            method: "POST",
-            body: JSON.stringify({
-                username
-            })
-        });
+        await api(
+            "/pinmail/create",
+            {
+                method: "POST",
+
+                body: JSON.stringify({
+                    username
+                })
+            }
+        );
 
         await loadMailboxes();
 
     } catch (error) {
 
-        alert(error.message);
+        alert(
+            error.message
+        );
+
     }
 };
 
@@ -362,9 +397,11 @@ async function selectMailbox(id) {
         return;
     }
 
-    $("#mailView").hidden = false;
+    $("#mailView").hidden =
+        false;
 
-    $("#currentAddress").textContent =
+    $("#currentAddress")
+        .textContent =
         state.current.address;
 
     await loadMessages();
@@ -386,10 +423,7 @@ async function loadMessages() {
                 state.current._id
             );
 
-        const messages =
-            data.messages || [];
-
-        if (!messages.length) {
+        if (!data.messages.length) {
 
             $("#messages").innerHTML = `
                 <p class="muted">
@@ -401,53 +435,54 @@ async function loadMessages() {
         }
 
         $("#messages").innerHTML =
-            messages
+            data.messages
                 .map(message => {
 
                     return `
                         <div class="message">
 
                             <b>
-                                ${esc(message.subject)}
+                                ${esc(
+                                    message.subject
+                                )}
                             </b>
 
                             <br>
 
                             <small>
-                                ${esc(message.from || "")}
+                                ${esc(
+                                    message.from || ""
+                                )}
                             </small>
 
                             <p>
-                                ${esc(message.body)}
+                                ${esc(
+                                    message.body
+                                )}
                             </p>
 
                         </div>
                     `;
+
                 })
                 .join("");
 
     } catch (error) {
 
-        console.error(
-            "Mail loading error:",
-            error
-        );
+        console.error(error);
+
     }
 }
 
 
-/* =========================================================
-   SEND MAIL
-========================================================= */
-
 $("#compose").onclick = async () => {
 
     if (!state.current) {
-        alert("Сначала выберите почтовый ящик.");
         return;
     }
 
-    const to = prompt("Кому?");
+    const to =
+        prompt("Кому?");
 
     if (!to) {
         return;
@@ -461,40 +496,46 @@ $("#compose").onclick = async () => {
 
     try {
 
-        await api("/mail/message", {
-            method: "POST",
+        await api(
+            "/mail/message",
+            {
+                method: "POST",
 
-            body: JSON.stringify({
-                mailbox_id:
-                    state.current._id,
-                to,
-                subject,
-                body
-            })
-        });
+                body: JSON.stringify({
+
+                    mailbox_id:
+                        state.current._id,
+
+                    to,
+                    subject,
+                    body
+
+                })
+            }
+        );
 
         await loadMessages();
 
     } catch (error) {
 
-        alert(error.message);
+        alert(
+            error.message
+        );
+
     }
 };
 
 
 /* =========================================================
-   AI CHAT
-========================================================= */
+   CHAT UI
+   ========================================================= */
 
-function addBubble(text, type) {
+function addBubble(
+    text,
+    type
+) {
 
-    const chat = $("#chat");
-
-    if (!chat) {
-        return;
-    }
-
-    chat.insertAdjacentHTML(
+    $("#chat").insertAdjacentHTML(
         "beforeend",
 
         `
@@ -504,51 +545,926 @@ function addBubble(text, type) {
         `
     );
 
-    chat.scrollTop =
-        chat.scrollHeight;
+    $("#chat").scrollTop =
+        $("#chat").scrollHeight;
 }
 
 
-async function sendAI(text, options = {}) {
+function addHTMLBubble(
+    html
+) {
 
-    text = String(text || "").trim();
+    $("#chat").insertAdjacentHTML(
+        "beforeend",
+
+        `
+        <div class="bubble ai">
+            ${html}
+        </div>
+        `
+    );
+
+    $("#chat").scrollTop =
+        $("#chat").scrollHeight;
+}
+
+
+/* =========================================================
+   TEXT TO SPEECH
+   ========================================================= */
+
+function speak(text) {
+
+    if (
+        !("speechSynthesis" in window)
+    ) {
+        return;
+    }
+
+    try {
+
+        window.speechSynthesis.cancel();
+
+        const clean = String(text)
+            .replace(
+                /ACTION:\s*[A-Z_:-]+/gi,
+                ""
+            )
+            .trim();
+
+        if (!clean) {
+            return;
+        }
+
+        const utterance =
+            new SpeechSynthesisUtterance(
+                clean
+            );
+
+        utterance.lang =
+            "ru-RU";
+
+        utterance.rate =
+            1;
+
+        utterance.pitch =
+            1;
+
+        window.speechSynthesis
+            .speak(utterance);
+
+    } catch (error) {
+
+        console.error(
+            "TTS error:",
+            error
+        );
+
+    }
+}
+
+
+/* =========================================================
+   DETECTION: IMAGE
+   ========================================================= */
+
+function isImageRequest(text) {
+
+    const value =
+        text.toLowerCase();
+
+    const patterns = [
+
+        /создай\s+(?:мне\s+)?изображени/i,
+        /сгенерируй\s+(?:мне\s+)?изображени/i,
+        /нарисуй/i,
+        /сгенерируй\s+картин/i,
+        /создай\s+картин/i,
+        /сделай\s+картин/i,
+        /изобрази/i,
+        /покажи\s+изображени/i,
+        /создай\s+арт/i,
+        /сгенерируй\s+арт/i,
+        /generate\s+(?:an?\s+)?image/i,
+        /create\s+(?:an?\s+)?image/i,
+        /draw\s+/i
+    ];
+
+    return patterns.some(
+        pattern =>
+            pattern.test(value)
+    );
+}
+
+
+/* =========================================================
+   IMAGE GENERATION
+   ========================================================= */
+
+async function generateImage(
+    prompt
+) {
+
+    addBubble(
+        prompt,
+        "user"
+    );
+
+    $("#chatInput").value = "";
+
+    addHTMLBubble(`
+        <div class="loading">
+            Создаю изображение…
+        </div>
+    `);
+
+    try {
+
+        const data =
+            await api(
+                "/ai/image",
+                {
+                    method: "POST",
+
+                    body: JSON.stringify({
+                        prompt
+                    })
+                }
+            );
+
+        // Удаляем последний loading bubble.
+        const bubbles =
+            $("#chat")
+                .querySelectorAll(
+                    ".bubble"
+                );
+
+        if (bubbles.length) {
+
+            bubbles[
+                bubbles.length - 1
+            ].remove();
+
+        }
+
+        if (!data.image) {
+
+            throw new Error(
+                "Сервер не вернул изображение"
+            );
+
+        }
+
+        addHTMLBubble(`
+
+            <div>
+                <div>
+                    <b>
+                        Готово
+                    </b>
+                </div>
+
+                <img
+                    class="ai-image"
+                    src="${escAttribute(
+                        data.image
+                    )}"
+                    alt="Сгенерированное изображение"
+                >
+
+                <p class="muted">
+                    ${esc(
+                        data.prompt ||
+                        prompt
+                    )}
+                </p>
+            </div>
+
+        `);
+
+    } catch (error) {
+
+        const bubbles =
+            $("#chat")
+                .querySelectorAll(
+                    ".bubble"
+                );
+
+        if (bubbles.length) {
+
+            bubbles[
+                bubbles.length - 1
+            ].remove();
+
+        }
+
+        addBubble(
+            "Ошибка генерации изображения: " +
+            error.message,
+            "ai"
+        );
+
+    }
+}
+
+
+/* =========================================================
+   DETECTION: WEATHER
+   ========================================================= */
+
+function isWeatherRequest(text) {
+
+    const value =
+        text.toLowerCase();
+
+    const patterns = [
+
+        /погод/i,
+        /температур/i,
+        /дожд/i,
+        /снег/i,
+        /ветер/i,
+        /облачн/i,
+        /ясно\s+сейчас/i,
+        /что\s+сейчас\s+на\s+улиц/i,
+        /weather/i,
+        /temperature/i,
+        /rain/i,
+        /snow/i
+
+    ];
+
+    return patterns.some(
+        pattern =>
+            pattern.test(value)
+    );
+}
+
+
+/* =========================================================
+   WEATHER CITY EXTRACTION
+   ========================================================= */
+
+function extractWeatherCity(text) {
+
+    const patterns = [
+
+        /погод[а-яё]*\s+(?:в|для)\s+(.+)/i,
+
+        /температур[а-яё]*\s+(?:в|для)\s+(.+)/i,
+
+        /погод[а-яё]*\s+([А-ЯЁA-Z][^,.!?]+)/i,
+
+        /weather\s+(?:in|for)\s+(.+)/i,
+
+        /temperature\s+(?:in|for)\s+(.+)/i
+
+    ];
+
+    for (
+        const pattern of patterns
+    ) {
+
+        const match =
+            text.match(pattern);
+
+        if (match && match[1]) {
+
+            return match[1]
+                .trim()
+                .replace(
+                    /[.!?]+$/,
+                    ""
+                );
+
+        }
+
+    }
+
+    return null;
+}
+
+
+/* =========================================================
+   WEATHER BY GEOLOCATION
+   ========================================================= */
+
+function getCurrentPosition() {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            if (
+                !navigator.geolocation
+            ) {
+
+                reject(
+                    new Error(
+                        "Геолокация не поддерживается браузером"
+                    )
+                );
+
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+
+                position => {
+
+                    resolve({
+                        lat:
+                            position.coords.latitude,
+
+                        lon:
+                            position.coords.longitude
+                    });
+
+                },
+
+                error => {
+
+                    let message =
+                        "Не удалось определить местоположение";
+
+                    if (
+                        error.code ===
+                        error.PERMISSION_DENIED
+                    ) {
+
+                        message =
+                            "Доступ к геолокации запрещён. " +
+                            "Разрешите геолокацию или укажите город.";
+
+                    }
+
+                    reject(
+                        new Error(message)
+                    );
+
+                },
+
+                {
+                    enableHighAccuracy:
+                        false,
+
+                    timeout:
+                        10000,
+
+                    maximumAge:
+                        300000
+                }
+            );
+
+        }
+    );
+}
+
+
+/* =========================================================
+   WEATHER ICON
+   ========================================================= */
+
+function weatherIcon(
+    weather
+) {
+
+    const main =
+        String(
+            weather?.weather?.[0]?.main ||
+            ""
+        ).toLowerCase();
+
+    if (
+        main.includes("thunder")
+    ) {
+        return "⛈️";
+    }
+
+    if (
+        main.includes("rain")
+    ) {
+        return "🌧️";
+    }
+
+    if (
+        main.includes("drizzle")
+    ) {
+        return "🌦️";
+    }
+
+    if (
+        main.includes("snow")
+    ) {
+        return "❄️";
+    }
+
+    if (
+        main.includes("cloud")
+    ) {
+        return "☁️";
+    }
+
+    if (
+        main.includes("mist") ||
+        main.includes("fog") ||
+        main.includes("haze")
+    ) {
+        return "🌫️";
+    }
+
+    return "☀️";
+}
+
+
+/* =========================================================
+   WEATHER CARD
+   ========================================================= */
+
+function renderWeather(weather) {
+
+    const city =
+        weather?.name ||
+        "Текущая точка";
+
+    const country =
+        weather?.sys?.country ||
+        "";
+
+    const temperature =
+        Math.round(
+            Number(
+                weather?.main?.temp ?? 0
+            )
+        );
+
+    const feels =
+        Math.round(
+            Number(
+                weather?.main?.feels_like ?? 0
+            )
+        );
+
+    const description =
+        weather?.weather?.[0]?.description ||
+        "Нет данных";
+
+    const humidity =
+        weather?.main?.humidity;
+
+    const wind =
+        weather?.wind?.speed;
+
+    const pressure =
+        weather?.main?.pressure;
+
+    const visibility =
+        weather?.visibility;
+
+    const icon =
+        weatherIcon(weather);
+
+    const visibilityKm =
+        visibility !== undefined
+            ? (
+                Number(visibility) / 1000
+            ).toFixed(1)
+            : null;
+
+    addHTMLBubble(`
+
+        <div class="weather-card">
+
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:16px;
+                margin-bottom:16px;
+            ">
+
+                <div style="
+                    font-size:58px;
+                    line-height:1;
+                ">
+                    ${icon}
+                </div>
+
+                <div>
+
+                    <h3 style="
+                        margin:0;
+                        font-size:20px;
+                    ">
+                        ${esc(city)}
+                        ${
+                            country
+                                ? ", " +
+                                  esc(country)
+                                : ""
+                        }
+                    </h3>
+
+                    <div
+                        class="weather-temperature"
+                        style="
+                            margin-top:8px;
+                        "
+                    >
+                        ${temperature}°C
+                    </div>
+
+                </div>
+
+            </div>
+
+            <p style="
+                font-size:16px;
+                text-transform:capitalize;
+            ">
+                ${esc(description)}
+            </p>
+
+            <div style="
+                display:grid;
+                grid-template-columns:
+                    repeat(
+                        auto-fit,
+                        minmax(130px, 1fr)
+                    );
+                gap:10px;
+                margin-top:14px;
+            ">
+
+                <div style="
+                    background:#fff;
+                    border-radius:12px;
+                    padding:12px;
+                ">
+                    <small class="muted">
+                        Ощущается
+                    </small>
+
+                    <br>
+
+                    <b>
+                        ${feels}°C
+                    </b>
+                </div>
+
+                ${
+                    humidity !== undefined
+                        ? `
+                            <div style="
+                                background:#fff;
+                                border-radius:12px;
+                                padding:12px;
+                            ">
+                                <small class="muted">
+                                    Влажность
+                                </small>
+
+                                <br>
+
+                                <b>
+                                    ${humidity}%
+                                </b>
+                            </div>
+                          `
+                        : ""
+                }
+
+                ${
+                    wind !== undefined
+                        ? `
+                            <div style="
+                                background:#fff;
+                                border-radius:12px;
+                                padding:12px;
+                            ">
+                                <small class="muted">
+                                    Ветер
+                                </small>
+
+                                <br>
+
+                                <b>
+                                    ${wind} м/с
+                                </b>
+                            </div>
+                          `
+                        : ""
+                }
+
+                ${
+                    pressure !== undefined
+                        ? `
+                            <div style="
+                                background:#fff;
+                                border-radius:12px;
+                                padding:12px;
+                            ">
+                                <small class="muted">
+                                    Давление
+                                </small>
+
+                                <br>
+
+                                <b>
+                                    ${pressure} гПа
+                                </b>
+                            </div>
+                          `
+                        : ""
+                }
+
+                ${
+                    visibilityKm !== null
+                        ? `
+                            <div style="
+                                background:#fff;
+                                border-radius:12px;
+                                padding:12px;
+                            ">
+                                <small class="muted">
+                                    Видимость
+                                </small>
+
+                                <br>
+
+                                <b>
+                                    ${visibilityKm} км
+                                </b>
+                            </div>
+                          `
+                        : ""
+                }
+
+            </div>
+
+        </div>
+
+    `);
+}
+
+
+/* =========================================================
+   WEATHER REQUEST
+   ========================================================= */
+
+async function getWeather(originalText) {
+
+    addBubble(
+        originalText,
+        "user"
+    );
+
+    $("#chatInput").value = "";
+
+    addHTMLBubble(`
+        <div class="loading">
+            Получаю данные о погоде…
+        </div>
+    `);
+
+    const loadingBubble =
+        $("#chat")
+            .querySelector(
+                ".bubble:last-child"
+            );
+
+    try {
+
+        const city =
+            extractWeatherCity(
+                originalText
+            );
+
+        let data;
+
+        /*
+         * Если пользователь указал город,
+         * используем его.
+         */
+
+        if (city) {
+
+            data = await api(
+                "/weather?city=" +
+                encodeURIComponent(city)
+            );
+
+        }
+
+        /*
+         * Если город не указан,
+         * пытаемся получить координаты устройства.
+         */
+
+        else {
+
+            try {
+
+                const position =
+                    await getCurrentPosition();
+
+                data = await api(
+                    "/weather?lat=" +
+                    encodeURIComponent(
+                        position.lat
+                    ) +
+                    "&lon=" +
+                    encodeURIComponent(
+                        position.lon
+                    )
+                );
+
+            } catch (geoError) {
+
+                /*
+                 * Если пользователь запретил
+                 * геолокацию — предлагаем город.
+                 */
+
+                const manualCity =
+                    prompt(
+                        "Не удалось определить ваше местоположение.\n\n" +
+                        "Введите город для получения погоды:"
+                    );
+
+                if (!manualCity) {
+
+                    throw geoError;
+
+                }
+
+                data = await api(
+                    "/weather?city=" +
+                    encodeURIComponent(
+                        manualCity.trim()
+                    )
+                );
+
+            }
+
+        }
+
+        if (loadingBubble) {
+            loadingBubble.remove();
+        }
+
+        renderWeather(data);
+
+        /*
+         * Озвучиваем результат.
+         */
+
+        const weatherCity =
+            data?.name ||
+            "указанном месте";
+
+        const description =
+            data?.weather?.[0]?.description ||
+            "";
+
+        const temperature =
+            Math.round(
+                Number(
+                    data?.main?.temp ?? 0
+                )
+            );
+
+        speak(
+            `Сейчас в ${
+                weatherCity
+            } ${
+                temperature
+            } градусов. ${
+                description
+            }.`
+        );
+
+    } catch (error) {
+
+        if (loadingBubble) {
+            loadingBubble.remove();
+        }
+
+        addBubble(
+            "Ошибка получения погоды: " +
+            error.message,
+            "ai"
+        );
+
+    }
+}
+
+
+/* =========================================================
+   NORMAL AI
+   ========================================================= */
+
+async function sendAI(text) {
+
+    text =
+        String(text || "")
+            .trim();
 
     if (!text) {
         return;
     }
 
-    addBubble(text, "user");
+    /*
+     * Сначала проверяем запрос изображения.
+     */
+
+    if (
+        isImageRequest(text)
+    ) {
+
+        await generateImage(
+            text
+        );
+
+        return;
+    }
+
+    /*
+     * Затем проверяем запрос погоды.
+     */
+
+    if (
+        isWeatherRequest(text)
+    ) {
+
+        await getWeather(
+            text
+        );
+
+        return;
+    }
+
+    /*
+     * Всё остальное отправляем Groq.
+     */
+
+    addBubble(
+        text,
+        "user"
+    );
 
     $("#chatInput").value = "";
+
+    addHTMLBubble(`
+        <div class="loading">
+            ИИ думает…
+        </div>
+    `);
+
+    const loadingBubble =
+        $("#chat")
+            .querySelector(
+                ".bubble:last-child"
+            );
 
     try {
 
         const data =
-            await api("/ai/chat", {
-                method: "POST",
+            await api(
+                "/ai/chat",
+                {
+                    method: "POST",
 
-                body: JSON.stringify({
-                    message: text
-                })
-            });
+                    body: JSON.stringify({
+                        message: text
+                    })
+                }
+            );
+
+        if (loadingBubble) {
+            loadingBubble.remove();
+        }
 
         const answer =
-            data.answer || "ИИ не дал ответа.";
+            data.answer ||
+            "ИИ не вернул ответ.";
 
         addBubble(
             answer,
             "ai"
         );
 
-        handleAction(answer);
+        handleAction(
+            answer
+        );
 
-        if (
-            options.speak !== false
-        ) {
-            speak(answer);
-        }
+        speak(
+            answer
+        );
 
     } catch (error) {
+
+        if (loadingBubble) {
+            loadingBubble.remove();
+        }
 
         addBubble(
             "Ошибка: " +
@@ -556,12 +1472,13 @@ async function sendAI(text, options = {}) {
             "ai"
         );
 
-        speak(
-            "Произошла ошибка при обращении к искусственному интеллекту."
-        );
     }
 }
 
+
+/* =========================================================
+   CHAT INPUT
+   ========================================================= */
 
 $("#send").onclick = () => {
 
@@ -570,21 +1487,29 @@ $("#send").onclick = () => {
             .value
             .trim()
     );
+
 };
 
 
 $("#chatInput").onkeydown = event => {
 
-    if (event.key === "Enter") {
+    if (
+        event.key === "Enter" &&
+        !event.shiftKey
+    ) {
+
         event.preventDefault();
+
         $("#send").click();
+
     }
+
 };
 
 
 /* =========================================================
-   AI ACTIONS
-========================================================= */
+   AI SITE ACTIONS
+   ========================================================= */
 
 function handleAction(answer) {
 
@@ -600,166 +1525,155 @@ function handleAction(answer) {
     const command =
         action[1].toUpperCase();
 
-    if (command === "OPEN_MAIL") {
+    /*
+     * Открыть Pinmail.
+     */
 
-        openPage("mail");
+    if (
+        command === "OPEN_MAIL"
+    ) {
 
-        speak("Открываю Pinmail.");
-
-        return;
-    }
-
-    if (command === "OPEN_GOV") {
-
-        openPage("gov");
-
-        speak("Открываю государственные услуги.");
+        openPage(
+            "mail"
+        );
 
         return;
     }
 
-    if (action[2]) {
+    /*
+     * Открыть Госуслуги.
+     */
 
-        const username =
-            action[2].toLowerCase();
+    if (
+        command === "OPEN_GOV"
+    ) {
 
-        api("/pinmail/create", {
-            method: "POST",
+        openPage(
+            "gov"
+        );
 
-            body: JSON.stringify({
-                username
-            })
-        })
+        return;
+    }
+
+    /*
+     * Создать Pinmail.
+     */
+
+    if (
+        action[2]
+    ) {
+
+        api(
+            "/pinmail/create",
+            {
+                method: "POST",
+
+                body: JSON.stringify({
+                    username:
+                        action[2]
+                })
+            }
+        )
         .then(() => {
 
-            openPage("mail");
+            openPage(
+                "mail"
+            );
 
             loadMailboxes();
 
-            addBubble(
-                `Почтовый адрес ${username}@pinmail.pin создан.`,
-                "ai"
-            );
-
             speak(
-                `Почтовый адрес ${username} на Pinmail создан.`
+                "Почтовый адрес создан."
             );
 
         })
         .catch(error => {
 
             addBubble(
-                "Не удалось создать почту: " +
+                "Ошибка создания почты: " +
                 error.message,
                 "ai"
             );
 
-            speak(
-                "Не удалось создать почтовый адрес."
-            );
         });
+
     }
 }
 
 
 /* =========================================================
    AI HISTORY
-========================================================= */
+   ========================================================= */
 
 async function loadChat() {
 
     try {
 
         const data =
-            await api("/ai/history");
+            await api(
+                "/ai/history"
+            );
 
-        $("#chat").innerHTML = "";
+        $("#chat").innerHTML =
+            "";
 
-        (data.messages || [])
-            .forEach(message => {
+        data.messages.forEach(
+            message => {
 
                 addBubble(
                     message.content,
-
                     message.role === "user"
                         ? "user"
                         : "ai"
                 );
-            });
+
+            }
+        );
 
     } catch (error) {
 
         console.error(
-            "AI history error:",
+            "AI history:",
             error
         );
+
     }
 }
 
 
 /* =========================================================
-   TEXT TO SPEECH
-========================================================= */
+   VOICE RECOGNITION
+   ========================================================= */
 
-function speak(text) {
+let recognition = null;
 
-    if (
-        !("speechSynthesis" in window)
-    ) {
-        return;
-    }
+let recognitionRunning =
+    false;
 
-    text = String(text || "");
+let finalTranscript =
+    "";
 
-    /*
-     * Убираем технические ACTION-команды
-     * перед озвучиванием.
-     */
-    text = text
-        .replace(
-            /ACTION:\s*[A-Z_]+(?::[a-z0-9._-]+)?/gi,
-            ""
-        )
-        .trim();
+let lastTranscript =
+    "";
 
-    if (!text) {
-        return;
-    }
-
-    window.speechSynthesis.cancel();
-
-    const utterance =
-        new SpeechSynthesisUtterance(text);
-
-    utterance.lang = "ru-RU";
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    const voices =
-        window.speechSynthesis.getVoices();
-
-    const russianVoice =
-        voices.find(voice =>
-            voice.lang &&
-            voice.lang.toLowerCase()
-                .startsWith("ru")
-        );
-
-    if (russianVoice) {
-        utterance.voice =
-            russianVoice;
-    }
-
-    window.speechSynthesis.speak(
-        utterance
-    );
-}
+let voiceSession =
+    false;
 
 
 /* =========================================================
-   MICROPHONE
-========================================================= */
+   MICROPHONE / AUDIO
+   ========================================================= */
+
+let audioContext = null;
+
+let analyser = null;
+
+let microphoneSource = null;
+
+let audioStream = null;
+
+let volumeAnimation = null;
+
 
 async function requestMicrophone() {
 
@@ -767,230 +1681,274 @@ async function requestMicrophone() {
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
     ) {
+
         throw new Error(
-            "Этот браузер не поддерживает доступ к микрофону."
+            "Микрофон не поддерживается этим браузером"
         );
+
     }
 
     if (audioStream) {
         return audioStream;
     }
 
-    try {
-
-        audioStream =
-            await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
+    audioStream =
+        await navigator.mediaDevices
+            .getUserMedia({
+                audio: true
             });
 
-        return audioStream;
+    return audioStream;
+}
+
+
+async function startAudioVisualizer() {
+
+    try {
+
+        const stream =
+            await requestMicrophone();
+
+        if (!audioContext) {
+
+            audioContext =
+                new (
+                    window.AudioContext ||
+                    window.webkitAudioContext
+                )();
+
+        }
+
+        if (
+            audioContext.state ===
+            "suspended"
+        ) {
+
+            await audioContext.resume();
+
+        }
+
+        if (!analyser) {
+
+            analyser =
+                audioContext
+                    .createAnalyser();
+
+            analyser.fftSize =
+                256;
+
+            analyser.smoothingTimeConstant =
+                0.75;
+
+        }
+
+        if (!microphoneSource) {
+
+            microphoneSource =
+                audioContext
+                    .createMediaStreamSource(
+                        stream
+                    );
+
+            microphoneSource.connect(
+                analyser
+            );
+
+        }
+
+        const data =
+            new Uint8Array(
+                analyser.fftSize
+            );
+
+        const animate = () => {
+
+            if (!voiceSession) {
+
+                volumeAnimation =
+                    null;
+
+                return;
+            }
+
+            analyser.getByteTimeDomainData(
+                data
+            );
+
+            let sum = 0;
+
+            for (
+                let i = 0;
+                i < data.length;
+                i++
+            ) {
+
+                const value =
+                    (
+                        data[i] -
+                        128
+                    ) / 128;
+
+                sum +=
+                    value * value;
+            }
+
+            const rms =
+                Math.sqrt(
+                    sum /
+                    data.length
+                );
+
+            const intensity =
+                Math.min(
+                    1,
+                    rms * 5
+                );
+
+            const scale =
+                1 +
+                intensity * 0.20;
+
+            const glow =
+                70 +
+                intensity * 90;
+
+            $("#orb").style.transform =
+                `scale(${scale})`;
+
+            $("#orb").style.boxShadow =
+                `
+                0 0 0 ${
+                    14 +
+                    intensity * 20
+                }px #2563eb18,
+                0 0 ${glow}px #2563eb77
+                `;
+
+            volumeAnimation =
+                requestAnimationFrame(
+                    animate
+                );
+        };
+
+        animate();
 
     } catch (error) {
 
         console.error(
-            "Microphone permission error:",
+            "Audio visualizer:",
             error
         );
 
-        if (
-            error.name ===
-            "NotAllowedError"
-        ) {
-            throw new Error(
-                "Доступ к микрофону запрещён. Разрешите микрофон для этого сайта в настройках браузера."
-            );
-        }
-
-        if (
-            error.name ===
-            "NotFoundError"
-        ) {
-            throw new Error(
-                "Микрофон не найден."
-            );
-        }
-
-        throw new Error(
-            "Не удалось получить доступ к микрофону: " +
-            error.message
-        );
     }
 }
 
 
-/* =========================================================
-   AUDIO VISUALIZER
-========================================================= */
+function stopAudioOnly() {
 
-async function startAudioVisualizer() {
+    voiceSession =
+        false;
 
-    const stream =
-        await requestMicrophone();
+    if (volumeAnimation) {
 
-    if (!audioContext) {
-
-        audioContext =
-            new (
-                window.AudioContext ||
-                window.webkitAudioContext
-            )();
-
-        analyser =
-            audioContext.createAnalyser();
-
-        analyser.fftSize = 256;
-
-        analyser.smoothingTimeConstant =
-            0.75;
-
-        microphoneSource =
-            audioContext.createMediaStreamSource(
-                stream
-            );
-
-        microphoneSource.connect(
-            analyser
+        cancelAnimationFrame(
+            volumeAnimation
         );
-    }
-
-    if (
-        audioContext.state ===
-        "suspended"
-    ) {
-        await audioContext.resume();
-    }
-
-    animateOrb();
-}
-
-
-function animateOrb() {
-
-    cancelAnimationFrame(
-        volumeAnimation
-    );
-
-    const data =
-        new Uint8Array(
-            analyser.frequencyBinCount
-        );
-
-    const orb = $("#orb");
-
-    function frame() {
-
-        if (!voiceSession) {
-
-            orb.style.transform = "";
-            orb.style.filter = "";
-
-            return;
-        }
-
-        analyser.getByteFrequencyData(
-            data
-        );
-
-        let sum = 0;
-
-        for (
-            let i = 0;
-            i < data.length;
-            i++
-        ) {
-            sum += data[i];
-        }
-
-        const average =
-            sum / data.length;
-
-        /*
-         * Усиливаем небольшую громкость
-         * голоса, чтобы шар было хорошо видно.
-         */
-        const level =
-            Math.min(
-                1,
-                average / 70
-            );
-
-        const scale =
-            1 + level * 0.35;
-
-        const glow =
-            70 + level * 100;
-
-        orb.style.transform =
-            `scale(${scale})`;
-
-        orb.style.filter =
-            `drop-shadow(0 0 ${glow}px rgba(37,99,235,${0.35 + level * 0.45}))`;
-
-        /*
-         * Если пользователь говорит,
-         * сбрасываем таймер тишины.
-         */
-        if (average > 10) {
-
-            clearTimeout(
-                silenceTimer
-            );
-
-            silenceTimer = null;
-        }
 
         volumeAnimation =
-            requestAnimationFrame(
-                frame
-            );
+            null;
     }
 
-    frame();
+    if ($("#orb")) {
+
+        $("#orb").style.transform =
+            "";
+
+        $("#orb").style.boxShadow =
+            "";
+
+        $("#orb")
+            .classList
+            .remove(
+                "listening"
+            );
+
+        $("#orb")
+            .classList
+            .remove(
+                "voice-active"
+            );
+    }
 }
 
 
 /* =========================================================
-   VOICE RECOGNITION
-========================================================= */
+   SPEECH RECOGNITION
+   ========================================================= */
 
 function createRecognition() {
+
+    if (
+        !("webkitSpeechRecognition" in window) &&
+        !("SpeechRecognition" in window)
+    ) {
+        return null;
+    }
 
     const Recognition =
         window.SpeechRecognition ||
         window.webkitSpeechRecognition;
 
-    if (!Recognition) {
-        return null;
-    }
-
-    const instance = new Recognition();
+    const instance =
+        new Recognition();
 
     instance.lang = "ru-RU";
-    instance.interimResults = true;
+
     instance.continuous = true;
+
+    instance.interimResults = true;
+
     instance.maxAlternatives = 1;
 
+
+    /* =====================================================
+       НАЧАЛО РАСПОЗНАВАНИЯ
+       ===================================================== */
 
     instance.onstart = () => {
 
         recognitionRunning = true;
 
+        voiceSession = true;
+
+        finalTranscript = "";
+
+        lastTranscript = "";
+
         $("#orb")
             .classList
             .add("listening");
 
-        $("#orbStatus").textContent =
+        $("#orb")
+            .classList
+            .add("voice-active");
+
+        $("#orbStatus")
+            .textContent =
             "Слушаю… говорите";
+
+        startAudioVisualizer();
     };
 
+
+    /* =====================================================
+       РАСПОЗНАВАНИЕ РЕЧИ
+       ===================================================== */
 
     instance.onresult = event => {
 
         let interim = "";
+
         let finalText = "";
 
         for (
@@ -1003,174 +1961,184 @@ function createRecognition() {
                 event.results[i];
 
             const transcript =
-                result[0].transcript;
+                result[0]
+                    .transcript
+                    .trim();
 
             if (result.isFinal) {
+
                 finalText +=
                     transcript + " ";
+
             } else {
-                interim += transcript;
+
+                interim +=
+                    transcript + " ";
             }
         }
 
-        if (interim) {
 
-            $("#orbStatus").textContent =
-                "Слышу: " + interim;
-        }
+        /*
+         * Финальный распознанный текст.
+         */
 
         if (finalText.trim()) {
 
             finalTranscript +=
-                " " + finalText.trim();
+                finalText.trim() + " ";
 
             lastTranscript =
                 finalTranscript.trim();
+        }
 
-            $("#orbStatus").textContent =
-                "Готовлю запрос…";
+
+        /*
+         * Показываем пользователю
+         * то, что он сейчас говорит.
+         */
+
+        const shown =
+            (
+                finalTranscript +
+                interim
+            ).trim();
+
+        if (shown) {
+
+            $("#orbStatus")
+                .textContent =
+                shown;
         }
     };
 
+
+    /* =====================================================
+       ОШИБКИ
+       ===================================================== */
 
     instance.onerror = event => {
 
-        console.warn(
-            "Speech recognition:",
+        console.error(
+            "Speech recognition error:",
             event.error
         );
 
-        if (event.error === "no-speech") {
-            return;
+
+        if (
+            event.error ===
+            "not-allowed"
+        ) {
+
+            $("#orbStatus")
+                .textContent =
+                "Разрешите доступ к микрофону";
+
+        } else if (
+            event.error ===
+            "no-speech"
+        ) {
+
+            $("#orbStatus")
+                .textContent =
+                "Речь не обнаружена";
+
+        } else if (
+            event.error ===
+            "network"
+        ) {
+
+            $("#orbStatus")
+                .textContent =
+                "Ошибка сети распознавания речи";
+
+        } else if (
+            event.error ===
+            "audio-capture"
+        ) {
+
+            $("#orbStatus")
+                .textContent =
+                "Микрофон недоступен";
+
+        } else {
+
+            $("#orbStatus")
+                .textContent =
+                "Ошибка распознавания речи";
         }
-
-        if (event.error === "not-allowed") {
-
-            $("#orbStatus").textContent =
-                "Браузер запретил доступ к микрофону.";
-
-            stopVoice();
-
-            return;
-        }
-
-        if (event.error === "audio-capture") {
-
-            $("#orbStatus").textContent =
-                "Не найден микрофон.";
-
-            stopVoice();
-
-            return;
-        }
-
-        $("#orbStatus").textContent =
-            "Ошибка распознавания речи.";
     };
 
 
-    instance.onend = async () => {
+    /* =====================================================
+       ОКОНЧАНИЕ РАСПОЗНАВАНИЯ
+       ===================================================== */
+
+    instance.onend = () => {
 
         recognitionRunning = false;
 
-        /*
-         * Если голосовой режим ещё активен,
-         * пытаемся продолжить распознавание.
-         */
-        if (
-            voiceSession &&
-            !finalTranscript.trim()
-        ) {
 
-            try {
+        const text =
+            (
+                finalTranscript ||
+                lastTranscript
+            ).trim();
 
-                await new Promise(resolve => {
-                    setTimeout(resolve, 150);
-                });
 
-                if (
-                    voiceSession &&
-                    recognition &&
-                    !recognitionRunning
-                ) {
-                    recognition.start();
-                }
+        finalTranscript = "";
 
-            } catch (error) {
+        lastTranscript = "";
 
-                console.warn(
-                    "Не удалось продолжить распознавание:",
-                    error
-                );
-            }
 
-            return;
-        }
+        stopAudioOnly();
+
+
+        $("#orbStatus")
+            .textContent =
+            "Нажмите на шар и говорите";
 
 
         /*
-         * Если речь распознана —
-         * отправляем её в ИИ.
+         * Если пользователь что-то сказал,
+         * отправляем это в sendAI().
+         *
+         * sendAI() уже умеет определять:
+         *
+         * обычный запрос
+         * запрос изображения
+         * запрос погоды
          */
-        if (
-            voiceSession &&
-            finalTranscript.trim()
-        ) {
 
-            const text =
-                finalTranscript.trim();
+        if (text) {
 
-            finalTranscript = "";
-            lastTranscript = "";
-
-            voiceSession = false;
-
-            stopAudioOnly();
-
-            $("#orb")
-                .classList
-                .remove("listening");
-
-            $("#orbStatus").textContent =
-                "Обрабатываю запрос…";
-
-            await sendAI(text);
-
-            $("#orbStatus").textContent =
-                "Нажмите на шар и говорите";
-
-            return;
-        }
-
-
-        if (!voiceSession) {
-
-            $("#orb")
-                .classList
-                .remove("listening");
-
-            $("#orbStatus").textContent =
-                "Нажмите на шар и говорите";
+            sendAI(text);
         }
     };
+
 
     return instance;
 }
 
 
 /* =========================================================
-   START VOICE
-========================================================= */
+   СОЗДАНИЕ РАСПОЗНАВАТЕЛЯ
+   ========================================================= */
+
+recognition =
+    createRecognition();
+
+
+/* =========================================================
+   ЗАПУСК ГОЛОСОВОГО РЕЖИМА
+   ========================================================= */
 
 async function startVoice() {
 
-    /*
-     * Если шар уже слушает,
-     * повторное нажатие останавливает его.
-     */
-    if (voiceSession) {
+    if (!recognition) {
 
-        stopVoice();
+        $("#orbStatus")
+            .textContent =
+            "Голосовой ввод не поддерживается этим браузером";
 
         return;
     }
@@ -1178,160 +2146,125 @@ async function startVoice() {
 
     try {
 
-        $("#orbStatus").textContent =
-            "Запрашиваю доступ к микрофону…";
-
-
         /*
-         * Запрашиваем микрофон
-         * непосредственно после нажатия
-         * пользователем на шар.
+         * Запрашиваем доступ к микрофону.
          */
+
         await requestMicrophone();
 
 
         /*
-         * Запускаем анализ громкости.
+         * Возобновляем AudioContext,
+         * если браузер его приостановил.
          */
-        await startAudioVisualizer();
 
+        if (
+            audioContext &&
+            audioContext.state ===
+                "suspended"
+        ) {
 
-        if (!recognition) {
-
-            $("#orbStatus").textContent =
-                "Распознавание речи не поддерживается этим браузером.";
-
-            return;
+            await audioContext.resume();
         }
 
 
         finalTranscript = "";
+
         lastTranscript = "";
 
         voiceSession = true;
 
 
-        $("#orb")
-            .classList
-            .add("listening");
+        /*
+         * Запускаем распознавание.
+         */
 
-        $("#orbStatus").textContent =
-            "Слушаю…";
-
-
-        try {
-
-            recognition.start();
-
-        } catch (error) {
-
-            console.warn(
-                "Recognition start:",
-                error
-            );
-        }
+        recognition.start();
 
 
     } catch (error) {
 
-        voiceSession = false;
+        console.error(
+            "Voice start error:",
+            error
+        );
 
-        stopAudioOnly();
-
-        $("#orb")
-            .classList
-            .remove("listening");
-
-        $("#orbStatus").textContent =
-            error.message;
-
-
-        if (
-            error.message
-                .toLowerCase()
-                .includes("запрещ")
-        ) {
-
-            alert(
-                error.message +
-                "\n\nОткройте настройки разрешений браузера и разрешите этому сайту использовать микрофон."
-            );
-        }
+        $("#orbStatus")
+            .textContent =
+            "Не удалось включить микрофон";
     }
 }
 
 
 /* =========================================================
-   STOP VOICE
-========================================================= */
+   ОСТАНОВКА ГОЛОСОВОГО РЕЖИМА
+   ========================================================= */
 
 function stopVoice() {
 
-    voiceSession = false;
-
-    finalTranscript = "";
-    lastTranscript = "";
-
-    clearTimeout(
-        silenceTimer
-    );
-
-    silenceTimer = null;
-
-
-    if (recognition) {
+    if (
+        recognition &&
+        recognitionRunning
+    ) {
 
         try {
+
             recognition.stop();
+
         } catch (error) {
-            console.warn(error);
+
+            console.error(
+                "Voice stop error:",
+                error
+            );
         }
     }
 
 
-    recognitionRunning = false;
+    voiceSession = false;
+
 
     stopAudioOnly();
 
 
-    const orb = $("#orb");
-
-    orb.classList.remove(
-        "listening"
-    );
-
-    orb.style.transform = "";
-    orb.style.filter = "";
-
-
-    $("#orbStatus").textContent =
+    $("#orbStatus")
+        .textContent =
         "Нажмите на шар и говорите";
 }
 
 
-function stopAudioOnly() {
+/* =========================================================
+   КНОПКА ИИ-ШАРА
+   ========================================================= */
 
-    cancelAnimationFrame(
-        volumeAnimation
-    );
+$("#orb").onclick =
+    async () => {
 
-    volumeAnimation = null;
-}
+        /*
+         * Если шар уже слушает —
+         * второе нажатие завершает запись.
+         */
+
+        if (recognitionRunning) {
+
+            stopVoice();
+
+            return;
+        }
+
+
+        /*
+         * Если не слушает —
+         * начинаем запись.
+         */
+
+        await startVoice();
+    };
 
 
 /* =========================================================
-   ORB BUTTON
-========================================================= */
-
-$("#orb").onclick = async () => {
-
-    await startVoice();
-};
-
-
-/* =========================================================
-   PAGE VISIBILITY
-========================================================= */
+   ОСТАНОВКА ПРИ УХОДЕ СО СТРАНИЦЫ
+   ========================================================= */
 
 document.addEventListener(
     "visibilitychange",
@@ -1339,8 +2272,9 @@ document.addEventListener(
 
         if (
             document.hidden &&
-            voiceSession
+            recognitionRunning
         ) {
+
             stopVoice();
         }
     }
@@ -1348,78 +2282,71 @@ document.addEventListener(
 
 
 /* =========================================================
-   SECURITY / HTML ESCAPING
-========================================================= */
+   ЗАЩИТА HTML
+   ========================================================= */
 
 function esc(value) {
 
-    return String(value ?? "")
-        .replace(
-            /[&<>"']/g,
-            character => {
+    return String(
+        value ?? ""
+    ).replace(
+        /[&<>"']/g,
+        character => {
 
-                const map = {
+            const map = {
 
-                    "&": "&amp;",
-                    "<": "&lt;",
-                    ">": "&gt;",
-                    '"': "&quot;",
-                    "'": "&#039;"
-                };
+                "&":
+                    "&amp;",
 
-                return map[character];
-            }
-        );
-}
+                "<":
+                    "&lt;",
 
+                ">":
+                    "&gt;",
 
-function escAttr(value) {
+                '"':
+                    "&quot;",
 
-    return String(value ?? "")
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-        .replace(
-            /'/g,
-            "&#039;"
-        )
-        .replace(
-            /</g,
-            "&lt;"
-        )
-        .replace(
-            />/g,
-            "&gt;"
-        );
+                "'":
+                    "&#039;"
+            };
+
+            return map[character];
+        }
+    );
 }
 
 
 /* =========================================================
-   BROWSER VOICE INITIALIZATION
-========================================================= */
+   ЗАЩИТА HTML-АТРИБУТОВ
+   ========================================================= */
 
-if (
-    "speechSynthesis" in window
-) {
+function escAttribute(value) {
 
-    window.speechSynthesis.onvoiceschanged =
-        () => {
-
-            window.speechSynthesis.getVoices();
-        };
+    return String(
+        value ?? ""
+    )
+    .replace(
+        /&/g,
+        "&amp;"
+    )
+    .replace(
+        /"/g,
+        "&quot;"
+    )
+    .replace(
+        /</g,
+        "&lt;"
+    )
+    .replace(
+        />/g,
+        "&gt;"
+    );
 }
 
 
 /* =========================================================
-   INITIALIZATION
-========================================================= */
-
-recognition =
-    createRecognition();
+   ЗАПУСК ПРИ ЗАГРУЗКЕ
+   ========================================================= */
 
 start();
