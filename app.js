@@ -656,117 +656,227 @@ function isImageRequest(text) {
     );
 }
 
-
 /* =========================================================
    IMAGE GENERATION
    ========================================================= */
 
-async function generateImage(
-    prompt
-) {
+async function generateImage(prompt) {
 
     addBubble(
-        prompt,
-        "user"
+        "user",
+        prompt
     );
 
-    $("#chatInput").value = "";
 
-    addHTMLBubble(`
-        <div class="loading">
-            Создаю изображение…
-        </div>
-    `);
+    const loading =
+        addBubble(
+            "ai",
+            "🎨 Создаю изображение…"
+        );
+
 
     try {
 
-        const data =
-            await api(
-                "/ai/image",
+        const token =
+            localStorage.getItem("token") ||
+            localStorage.getItem("pin_token");
+
+
+        const headers = {
+            "Content-Type":
+                "application/json"
+        };
+
+
+        if (token) {
+
+            headers["Authorization"] =
+                "Bearer " + token;
+        }
+
+
+        const response =
+            await fetch(
+                "/api/ai/image",
                 {
                     method: "POST",
 
+                    headers: headers,
+
                     body: JSON.stringify({
-                        prompt
+                        prompt: prompt
                     })
                 }
             );
 
-        // Удаляем последний loading bubble.
-        const bubbles =
-            $("#chat")
-                .querySelectorAll(
-                    ".bubble"
-                );
 
-        if (bubbles.length) {
+        const data =
+            await response.json();
 
-            bubbles[
-                bubbles.length - 1
-            ].remove();
 
+        console.log(
+            "IMAGE RESPONSE:",
+            data
+        );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Ошибка генерации изображения"
+            );
         }
+
 
         if (!data.image) {
 
             throw new Error(
                 "Сервер не вернул изображение"
             );
-
         }
 
-        addHTMLBubble(`
 
-            <div>
-                <div>
-                    <b>
-                        Готово
-                    </b>
-                </div>
+        loading.remove();
 
-                <img
-                    class="ai-image"
-                    src="${escAttribute(
-                        data.image
-                    )}"
-                    alt="Сгенерированное изображение"
-                >
 
-                <p class="muted">
-                    ${esc(
-                        data.prompt ||
-                        prompt
-                    )}
-                </p>
-            </div>
+        /*
+         * Создаём сообщение
+         */
 
-        `);
+        const bubble =
+            document.createElement("div");
+
+        bubble.className =
+            "bubble ai";
+
+
+        /*
+         * Само изображение
+         */
+
+        const image =
+            document.createElement("img");
+
+
+        image.alt =
+            prompt;
+
+
+        image.style.display =
+            "block";
+
+        image.style.width =
+            "100%";
+
+        image.style.maxWidth =
+            "700px";
+
+        image.style.height =
+            "auto";
+
+        image.style.borderRadius =
+            "18px";
+
+        image.style.objectFit =
+            "contain";
+
+        image.style.background =
+            "#f0f3f8";
+
+
+        /*
+         * ВАЖНО:
+         *
+         * data.image может быть:
+         *
+         * data:image/png;base64,...
+         *
+         * или обычным URL.
+         */
+
+        image.src =
+            data.image;
+
+
+        /*
+         * Если картинка реально загрузилась
+         */
+
+        image.onload = () => {
+
+            console.log(
+                "IMAGE LOADED"
+            );
+        };
+
+
+        /*
+         * Если браузер не смог
+         * отобразить результат
+         */
+
+        image.onerror = () => {
+
+            console.error(
+                "IMAGE LOAD ERROR",
+                data.image
+                    ? data.image.substring(
+                        0,
+                        100
+                    )
+                    : null
+            );
+
+
+            bubble.innerHTML = "";
+
+            const errorText =
+                document.createElement(
+                    "div"
+                );
+
+            errorText.textContent =
+                "❌ Изображение получено, но браузер не смог его отобразить.";
+
+            bubble.appendChild(
+                errorText
+            );
+        };
+
+
+        bubble.appendChild(
+            image
+        );
+
+
+        /*
+         * Добавляем в чат
+         */
+
+        $("#chat")
+            .appendChild(
+                bubble
+            );
+
+
+        $("#chat").scrollTop =
+            $("#chat").scrollHeight;
+
 
     } catch (error) {
 
-        const bubbles =
-            $("#chat")
-                .querySelectorAll(
-                    ".bubble"
-                );
-
-        if (bubbles.length) {
-
-            bubbles[
-                bubbles.length - 1
-            ].remove();
-
-        }
-
-        addBubble(
-            "Ошибка генерации изображения: " +
-            error.message,
-            "ai"
+        console.error(
+            "Image error:",
+            error
         );
 
+
+        loading.textContent =
+            "❌ " +
+            error.message;
     }
 }
-
 
 /* =========================================================
    DETECTION: WEATHER
@@ -1210,147 +1320,135 @@ function renderWeather(weather) {
    WEATHER REQUEST
    ========================================================= */
 
-async function getWeather(city = null, lat = null, lon = null) {
+@app.get("/api/weather")
+@auth_required
+def weather(user):
+    if not OPENWEATHER_API_KEY:
+        return jsonify({"error": "OPENWEATHER_API_KEY не задан"}), 500
 
-    try {
+    lat = request.args.get("lat")
+    lon = request.args.get("lon")
+    place = (request.args.get("city") or request.args.get("place") or "").strip()
 
-        let url = "/api/weather";
+    # 1. Если уже есть координаты — сразу получаем погоду
+    if lat and lon:
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
 
+            if not (-90 <= lat_f <= 90 and -180 <= lon_f <= 180):
+                return jsonify({"error": "Некорректные координаты"}), 400
 
-        /* =================================================
-           КООРДИНАТЫ
-           ================================================= */
+        except ValueError:
+            return jsonify({"error": "Координаты должны быть числами"}), 400
 
-        if (
-            lat !== null &&
-            lon !== null
-        ) {
+    # 2. Если передано название места — ищем координаты
+    elif place:
+        lat_f = None
+        lon_f = None
 
-            url =
-                "/api/weather?lat=" +
-                encodeURIComponent(lat) +
-                "&lon=" +
-                encodeURIComponent(lon);
-        }
+        # Сначала OpenWeather Geocoding
+        try:
+            geo = requests.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params={
+                    "q": place,
+                    "limit": 5,
+                    "appid": OPENWEATHER_API_KEY
+                },
+                timeout=15
+            )
 
+            if geo.ok:
+                results = geo.json()
 
-        /* =================================================
-           НАЗВАНИЕ МЕСТА
-           ================================================= */
+                if results:
+                    # Берём наиболее подходящий результат
+                    best = results[0]
+                    lat_f = float(best["lat"])
+                    lon_f = float(best["lon"])
 
-        else if (city) {
+                    found_name = best.get("name", place)
+                    country = best.get("country", "")
+                    state = best.get("state", "")
 
-            url =
-                "/api/weather?city=" +
-                encodeURIComponent(city);
-        }
+        except Exception as e:
+            app.logger.warning("OpenWeather geocoding error: %s", e)
 
+        # 3. Если OpenWeather не нашёл — резервный Nominatim
+        if lat_f is None or lon_f is None:
+            try:
+                geo = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={
+                        "q": place,
+                        "format": "jsonv2",
+                        "limit": 1
+                    },
+                    headers={
+                        "User-Agent": "PinianFederationWeather/1.0"
+                    },
+                    timeout=15
+                )
 
-        /* =================================================
-           GPS
-           ================================================= */
+                if geo.ok:
+                    results = geo.json()
 
-        else {
+                    if results:
+                        lat_f = float(results[0]["lat"])
+                        lon_f = float(results[0]["lon"])
 
-            if (
-                !navigator.geolocation
-            ) {
+            except Exception as e:
+                app.logger.warning("Nominatim geocoding error: %s", e)
 
-                throw new Error(
-                    "Ваш браузер не поддерживает GPS"
-                );
-            }
+        if lat_f is None or lon_f is None:
+            return jsonify({
+                "error": f"Место «{place}» не найдено"
+            }), 404
 
+        lat = str(lat_f)
+        lon = str(lon_f)
 
-            $("#orbStatus").textContent =
-                "Определяю ваше местоположение…";
+    else:
+        return jsonify({
+            "error": "Укажите название места или координаты"
+        }), 400
 
+    # 4. Получаем фактическую погоду именно по координатам
+    try:
+        weather_response = requests.get(
+            "https://api.openweathermap.org/data/2.5/weather",
+            params={
+                "lat": lat,
+                "lon": lon,
+                "appid": OPENWEATHER_API_KEY,
+                "units": "metric",
+                "lang": "ru"
+            },
+            timeout=20
+        )
+    except Exception as e:
+        app.logger.exception(e)
+        return jsonify({
+            "error": "Ошибка соединения с сервисом погоды"
+        }), 502
 
-            const position =
-                await new Promise(
-                    (resolve, reject) => {
+    if not weather_response.ok:
+        return jsonify({
+            "error": "OpenWeather не смог получить погоду",
+            "details": weather_response.text[:500]
+        }), weather_response.status_code
 
-                        navigator.geolocation.getCurrentPosition(
-                            resolve,
-                            reject,
-                            {
-                                enableHighAccuracy:
-                                    true,
+    weather_data = weather_response.json()
 
-                                timeout:
-                                    15000,
-
-                                maximumAge:
-                                    300000
-                            }
-                        );
-                    }
-                );
-
-
-            lat =
-                position.coords.latitude;
-
-            lon =
-                position.coords.longitude;
-
-
-            url =
-                "/api/weather?lat=" +
-                encodeURIComponent(lat) +
-                "&lon=" +
-                encodeURIComponent(lon);
-        }
-
-
-        /* =================================================
-           ЗАПРОС
-           ================================================= */
-
-        const response =
-            await apiFetch(url);
-
-
-        const data =
-            await response.json();
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                data.error ||
-                "Не удалось получить погоду"
-            );
-        }
-
-
-        console.log(
-            "Weather:",
-            data
-        );
-
-
-        renderWeather(data);
-
-
-        return data;
-
-
-    } catch (error) {
-
-        console.error(
-            "Weather error:",
-            error
-        );
-
-
-        addBubble(
-            "ai",
-            "🌦️ Не удалось получить погоду: " +
-            error.message
-        );
+    # Добавляем информацию о точке
+    weather_data["_source"] = {
+        "lat": float(lat),
+        "lon": float(lon),
+        "requested_place": place or None
     }
-}
+
+    return jsonify(weather_data)
 
 /* =========================================================
    NORMAL AI
