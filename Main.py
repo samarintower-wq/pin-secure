@@ -79,6 +79,23 @@ def clean_username(s):
 def index():
     return send_from_directory(BASE_DIR, "index.html")
 
+@app.get("/style.css")
+def style_css():
+    return send_from_directory(
+        BASE_DIR,
+        "style.css",
+        mimetype="text/css"
+    )
+
+
+@app.get("/app.js")
+def app_js():
+    return send_from_directory(
+        BASE_DIR,
+        "app.js",
+        mimetype="application/javascript"
+    )
+
 @app.get("/api/health")
 def health():
     ok = False
