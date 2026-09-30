@@ -1320,135 +1320,123 @@ function renderWeather(weather) {
    WEATHER REQUEST
    ========================================================= */
 
-@app.get("/api/weather")
-@auth_required
-def weather(user):
-    if not OPENWEATHER_API_KEY:
-        return jsonify({"error": "OPENWEATHER_API_KEY не задан"}), 500
+async function getWeather(city = null, lat = null, lon = null) {
+    try {
+        let url = "/api/weather";
 
-    lat = request.args.get("lat")
-    lon = request.args.get("lon")
-    place = (request.args.get("city") or request.args.get("place") or "").strip()
+        if (lat !== null && lon !== null) {
+            url =
+                "/api/weather?lat=" +
+                encodeURIComponent(lat) +
+                "&lon=" +
+                encodeURIComponent(lon);
+        } else if (city) {
+            url =
+                "/api/weather?city=" +
+                encodeURIComponent(city);
+        } else {
+            if (!navigator.geolocation) {
+                throw new Error("Геолокация не поддерживается браузером");
+            }
 
-    # 1. Если уже есть координаты — сразу получаем погоду
-    if lat and lon:
-        try:
-            lat_f = float(lat)
-            lon_f = float(lon)
+            $("#orbStatus").textContent =
+                "📍 Определяю ваше местоположение…";
 
-            if not (-90 <= lat_f <= 90 and -180 <= lon_f <= 180):
-                return jsonify({"error": "Некорректные координаты"}), 400
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    resolve,
+                    reject,
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 300000
+                    }
+                );
+            });
 
-        except ValueError:
-            return jsonify({"error": "Координаты должны быть числами"}), 400
+            lat = position.coords.latitude;
+            lon = position.coords.longitude;
 
-    # 2. Если передано название места — ищем координаты
-    elif place:
-        lat_f = None
-        lon_f = None
+            url =
+                "/api/weather?lat=" +
+                encodeURIComponent(lat) +
+                "&lon=" +
+                encodeURIComponent(lon);
+        }
 
-        # Сначала OpenWeather Geocoding
-        try:
-            geo = requests.get(
-                "https://api.openweathermap.org/geo/1.0/direct",
-                params={
-                    "q": place,
-                    "limit": 5,
-                    "appid": OPENWEATHER_API_KEY
-                },
-                timeout=15
-            )
+        const token =
+            localStorage.getItem("token") ||
+            localStorage.getItem("pin_token");
 
-            if geo.ok:
-                results = geo.json()
+        const headers = {};
 
-                if results:
-                    # Берём наиболее подходящий результат
-                    best = results[0]
-                    lat_f = float(best["lat"])
-                    lon_f = float(best["lon"])
+        if (token) {
+            headers["Authorization"] = "Bearer " + token;
+        }
 
-                    found_name = best.get("name", place)
-                    country = best.get("country", "")
-                    state = best.get("state", "")
+        const response = await fetch(url, {
+            method: "GET",
+            headers
+        });
 
-        except Exception as e:
-            app.logger.warning("OpenWeather geocoding error: %s", e)
+        const data = await response.json();
 
-        # 3. Если OpenWeather не нашёл — резервный Nominatim
-        if lat_f is None or lon_f is None:
-            try:
-                geo = requests.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params={
-                        "q": place,
-                        "format": "jsonv2",
-                        "limit": 1
-                    },
-                    headers={
-                        "User-Agent": "PinianFederationWeather/1.0"
-                    },
-                    timeout=15
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "Ошибка получения погоды: HTTP " + response.status
+            );
+        }
+
+        console.log("WEATHER RESULT:", data);
+
+        renderWeather(data);
+
+        return data;
+
+    } catch (error) {
+        console.error("Weather error:", error);
+
+        addBubble(
+            "ai",
+            "🌦️ Не удалось получить погоду: " + error.message
+        );
+
+        return null;
+    }
+}
+
+function extractWeatherLocation(text) {
+    let value = text
+        .trim()
+        .replace(/[?!]/g, " ");
+
+    const patterns = [
+        /(?:погода|температура|прогноз)\s+(?:сейчас\s+)?(?:в|во|на)\s+(.+)/i,
+
+        /(?:какая|какой)\s+(?:сейчас\s+)?погода\s+(?:в|во|на)\s+(.+)/i,
+
+        /(?:погода|температура)\s+(.+)/i,
+
+        /(?:weather|forecast)\s+(?:in|at|for)\s+(.+)/i
+    ];
+
+    for (const pattern of patterns) {
+        const match = value.match(pattern);
+
+        if (match && match[1]) {
+            return match[1]
+                .replace(
+                    /\s+(?:сейчас|сегодня|завтра|на сегодня|на завтра).*$/i,
+                    ""
                 )
-
-                if geo.ok:
-                    results = geo.json()
-
-                    if results:
-                        lat_f = float(results[0]["lat"])
-                        lon_f = float(results[0]["lon"])
-
-            except Exception as e:
-                app.logger.warning("Nominatim geocoding error: %s", e)
-
-        if lat_f is None or lon_f is None:
-            return jsonify({
-                "error": f"Место «{place}» не найдено"
-            }), 404
-
-        lat = str(lat_f)
-        lon = str(lon_f)
-
-    else:
-        return jsonify({
-            "error": "Укажите название места или координаты"
-        }), 400
-
-    # 4. Получаем фактическую погоду именно по координатам
-    try:
-        weather_response = requests.get(
-            "https://api.openweathermap.org/data/2.5/weather",
-            params={
-                "lat": lat,
-                "lon": lon,
-                "appid": OPENWEATHER_API_KEY,
-                "units": "metric",
-                "lang": "ru"
-            },
-            timeout=20
-        )
-    except Exception as e:
-        app.logger.exception(e)
-        return jsonify({
-            "error": "Ошибка соединения с сервисом погоды"
-        }), 502
-
-    if not weather_response.ok:
-        return jsonify({
-            "error": "OpenWeather не смог получить погоду",
-            "details": weather_response.text[:500]
-        }), weather_response.status_code
-
-    weather_data = weather_response.json()
-
-    # Добавляем информацию о точке
-    weather_data["_source"] = {
-        "lat": float(lat),
-        "lon": float(lon),
-        "requested_place": place or None
+                .replace(/[.,]+$/, "")
+                .trim();
+        }
     }
 
-    return jsonify(weather_data)
+    return null;
+}
 
 /* =========================================================
    NORMAL AI
