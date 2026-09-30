@@ -530,6 +530,29 @@ $("#compose").onclick = async () => {
    CHAT UI
    ========================================================= */
 
+function addHTMLBubble(type, html) {
+    const chat = document.querySelector("#chat");
+
+    if (!chat) {
+        console.error("Chat container #chat not found");
+        return null;
+    }
+
+    const bubble = document.createElement("div");
+
+    bubble.className =
+        "bubble " +
+        (type === "user" ? "user" : "ai");
+
+    bubble.innerHTML = html;
+
+    chat.appendChild(bubble);
+
+    chat.scrollTop = chat.scrollHeight;
+
+    return bubble;
+}
+
 function addBubble(type, text) {
     const chat = document.querySelector("#chat");
 
