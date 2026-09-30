@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: pin-federation
+    runtime: python
+
+    buildCommand: pip install -r requirements.txt
+
+    startCommand: gunicorn Main:app
+
+    envVars:
+
+      - key: MONGODB_URI
+        sync: false
+
+      - key: MONGODB_DB
+        value: pin_federation
+
+      - key: JWT_SECRET
+        sync: false
+
+      - key: GROQ_API_KEY
+        sync: false
+
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+
+      - key: CLOUDFLARE_IMAGE_MODEL
+        value: "@cf/black-forest-labs/flux-1-schnell"
+
+      - key: OPENWEATHER_API_KEY
+        sync: false
