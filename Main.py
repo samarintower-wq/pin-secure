@@ -1235,234 +1235,132 @@ def ai_history(user):
 @app.get("/api/weather")
 @auth_required
 def weather(user):
-
     if not OPENWEATHER_API_KEY:
-        return jsonify({
-            "error": "OPENWEATHER_API_KEY не задан в Render"
-        }), 500
+        return jsonify({"error": "OPENWEATHER_API_KEY не задан"}), 500
 
-    lat = request.args.get("lat", "").strip()
-    lon = request.args.get("lon", "").strip()
-    city = request.args.get("city", "").strip()
+    lat = request.args.get("lat")
+    lon = request.args.get("lon")
+    place = (request.args.get("city") or request.args.get("place") or "").strip()
 
-    base_params = {
-        "appid": OPENWEATHER_API_KEY,
-        "units": "metric",
-        "lang": "ru"
-    }
-
-    # =====================================================
-    # 1. КООРДИНАТЫ
-    # =====================================================
-
+    # 1. Если уже есть координаты — сразу получаем погоду
     if lat and lon:
-
         try:
-            lat_value = float(lat)
-            lon_value = float(lon)
+            lat_f = float(lat)
+            lon_f = float(lon)
 
-            if not -90 <= lat_value <= 90:
-                raise ValueError()
-
-            if not -180 <= lon_value <= 180:
-                raise ValueError()
+            if not (-90 <= lat_f <= 90 and -180 <= lon_f <= 180):
+                return jsonify({"error": "Некорректные координаты"}), 400
 
         except ValueError:
+            return jsonify({"error": "Координаты должны быть числами"}), 400
 
-            return jsonify({
-                "error": "Некорректные координаты"
-            }), 400
+    # 2. Если передано название места — ищем координаты
+    elif place:
+        lat_f = None
+        lon_f = None
 
-
-        params = {
-            **base_params,
-            "lat": lat_value,
-            "lon": lon_value
-        }
-
-
-    # =====================================================
-    # 2. НАЗВАНИЕ ГОРОДА / МЕСТА
-    # =====================================================
-
-    elif city:
-
-        # Сначала используем Geocoding API.
-        #
-        # Это позволяет:
-        # Москва
-        # Paris
-        # Tokyo
-        # New York
-        # маленькие города
-        # населённые пункты
-        # и т.д.
-
-        geo_params = {
-            "q": city,
-            "limit": 5,
-            "appid": OPENWEATHER_API_KEY
-        }
-
+        # Сначала OpenWeather Geocoding
         try:
-
-            geo_response = requests.get(
+            geo = requests.get(
                 "https://api.openweathermap.org/geo/1.0/direct",
-                params=geo_params,
-                timeout=20
+                params={
+                    "q": place,
+                    "limit": 5,
+                    "appid": OPENWEATHER_API_KEY
+                },
+                timeout=15
             )
 
-        except requests.RequestException as e:
+            if geo.ok:
+                results = geo.json()
 
-            return jsonify({
-                "error": "Ошибка соединения с OpenWeather Geocoding",
-                "details": str(e)
-            }), 502
+                if results:
+                    # Берём наиболее подходящий результат
+                    best = results[0]
+                    lat_f = float(best["lat"])
+                    lon_f = float(best["lon"])
 
+                    found_name = best.get("name", place)
+                    country = best.get("country", "")
+                    state = best.get("state", "")
 
-        if not geo_response.ok:
+        except Exception as e:
+            app.logger.warning("OpenWeather geocoding error: %s", e)
 
+        # 3. Если OpenWeather не нашёл — резервный Nominatim
+        if lat_f is None or lon_f is None:
             try:
-                details = geo_response.json()
-            except Exception:
-                details = geo_response.text[:1000]
+                geo = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={
+                        "q": place,
+                        "format": "jsonv2",
+                        "limit": 1
+                    },
+                    headers={
+                        "User-Agent": "PinianFederationWeather/1.0"
+                    },
+                    timeout=15
+                )
 
+                if geo.ok:
+                    results = geo.json()
+
+                    if results:
+                        lat_f = float(results[0]["lat"])
+                        lon_f = float(results[0]["lon"])
+
+            except Exception as e:
+                app.logger.warning("Nominatim geocoding error: %s", e)
+
+        if lat_f is None or lon_f is None:
             return jsonify({
-                "error": "Ошибка геокодирования места",
-                "status": geo_response.status_code,
-                "details": details
-            }), geo_response.status_code
-
-
-        try:
-
-            locations = geo_response.json()
-
-        except Exception:
-
-            return jsonify({
-                "error": "Geocoding вернул некорректный ответ"
-            }), 502
-
-
-        if not locations:
-
-            return jsonify({
-                "error": f"Место «{city}» не найдено"
+                "error": f"Место «{place}» не найдено"
             }), 404
 
-
-        # Берём первый наиболее подходящий результат.
-        location = locations[0]
-
-        found_lat = location.get("lat")
-        found_lon = location.get("lon")
-
-        if found_lat is None or found_lon is None:
-
-            return jsonify({
-                "error": "Geocoding не вернул координаты"
-            }), 502
-
-
-        params = {
-            **base_params,
-            "lat": found_lat,
-            "lon": found_lon
-        }
-
-
-    # =====================================================
-    # 3. НИЧЕГО НЕ УКАЗАНО
-    # =====================================================
+        lat = str(lat_f)
+        lon = str(lon_f)
 
     else:
-
         return jsonify({
-            "error": "Укажите city или lat/lon"
+            "error": "Укажите название места или координаты"
         }), 400
 
-
-    # =====================================================
-    # 4. ПОЛУЧАЕМ ПОГОДУ ПО КООРДИНАТАМ
-    # =====================================================
-
+    # 4. Получаем фактическую погоду именно по координатам
     try:
-
         weather_response = requests.get(
             "https://api.openweathermap.org/data/2.5/weather",
-            params=params,
+            params={
+                "lat": lat,
+                "lon": lon,
+                "appid": OPENWEATHER_API_KEY,
+                "units": "metric",
+                "lang": "ru"
+            },
             timeout=20
         )
-
-    except requests.RequestException as e:
-
+    except Exception as e:
+        app.logger.exception(e)
         return jsonify({
-            "error": "Ошибка соединения с OpenWeather",
-            "details": str(e)
+            "error": "Ошибка соединения с сервисом погоды"
         }), 502
-
 
     if not weather_response.ok:
-
-        try:
-            details = weather_response.json()
-        except Exception:
-            details = weather_response.text[:1000]
-
-        print(
-            "OPENWEATHER WEATHER ERROR:",
-            weather_response.status_code,
-            details
-        )
-
         return jsonify({
-            "error": "OpenWeather вернул ошибку погоды",
-            "status": weather_response.status_code,
-            "details": details
+            "error": "OpenWeather не смог получить погоду",
+            "details": weather_response.text[:500]
         }), weather_response.status_code
 
+    weather_data = weather_response.json()
 
-    try:
-
-        weather_data = weather_response.json()
-
-    except Exception:
-
-        return jsonify({
-            "error": "OpenWeather вернул некорректный JSON"
-        }), 502
-
-
-    # =====================================================
-    # 5. ДОБАВЛЯЕМ ИНФОРМАЦИЮ О НАЙДЕННОМ МЕСТЕ
-    # =====================================================
-
-    result = {
-        **weather_data
+    # Добавляем информацию о точке
+    weather_data["_source"] = {
+        "lat": float(lat),
+        "lon": float(lon),
+        "requested_place": place or None
     }
 
-
-    result["_source"] = {
-        "lat": weather_data.get(
-            "coord", {}
-        ).get("lat"),
-
-        "lon": weather_data.get(
-            "coord", {}
-        ).get("lon"),
-
-        "city": weather_data.get(
-            "name"
-        ),
-
-        "country": weather_data.get(
-            "sys", {}
-        ).get("country")
-    }
-
-
-    return jsonify(result)
+    return jsonify(weather_data)
 
 # =========================================================
 # AI IMAGE GENERATION
