@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Пинийская Федерация — Госуслуги</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="auth" class="auth">
+  <div class="auth-card">
+    <div class="brand-mark">ПФ</div>
+    <h1>Пинийская Федерация</h1>
+    <p class="muted">Единый портал государственных цифровых услуг</p>
+    <div class="tabs"><button class="tab active" data-auth="login">Войти</button><button class="tab" data-auth="register">Регистрация</button></div>
+    <form id="loginForm">
+      <input name="first_name" placeholder="Имя из Пинийского паспорта" required>
+      <input name="last_name" placeholder="Фамилия" required>
+      <input name="password" type="password" placeholder="Пароль" required>
+      <button class="primary">Войти</button>
+    </form>
+    <form id="registerForm" hidden>
+      <input name="first_name" placeholder="Имя" required><input name="last_name" placeholder="Фамилия" required>
+      <input name="birth_year" type="number" placeholder="Год рождения" required>
+      <input name="position" placeholder="Должность" required><input name="rank" placeholder="Звание" required>
+      <input name="password" type="password" minlength="8" placeholder="Пароль (8+ символов)" required>
+      <button class="primary">Зарегистрироваться</button>
+    </form>
+    <div id="authError" class="error"></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header><div class="logo">ПФ</div><div class="title">Пинийская Федерация</div><button id="logout" class="ghost">Выйти</button></header>
+<main>
+<nav class="nav">
+<button class="nav-btn active" data-page="gov">🏛️ Госуслуги</button>
+<button class="nav-btn" data-page="mail">✉️ Pinmail.pin</button>
+<button class="nav-btn" data-page="ai">✦ ИИ помощник</button>
+</nav>
+
+<section id="gov" class="page active"><div class="hero"><span class="eyebrow">ГОСУДАРСТВЕННЫЕ УСЛУГИ</span><h2>Добро пожаловать</h2><p>Создавайте цифровые счета и управляйте государственными услугами Пинийской Федерации.</p></div>
+<div class="grid"><article class="card"><h3>Цифровой счёт</h3><p>Для создания счёта требуется адрес Pinmail.</p><button class="primary" onclick="openPage('mail')">Создать Pinmail</button></article><article class="card"><h3>Ваш профиль</h3><div id="profile"></div></article></div></section>
+
+<section id="mail" class="page"><div class="section-head"><div><span class="eyebrow">PINMAIL.PIN</span><h2>Почта</h2></div><button class="primary" id="newMail">+ Создать адрес</button></div>
+<div id="mailboxes" class="mailboxes"></div>
+<div id="mailView" class="mail-view" hidden><aside id="folders"><button class="folder active">Входящие</button><button class="folder">Отправленные</button><button class="folder">Корзина</button><button class="folder" id="mailSettings">Настройки</button></aside><div class="inbox"><div class="inbox-head"><h3 id="currentAddress"></h3><button class="ghost" id="compose">Написать</button></div><div id="messages"></div></div></div>
+</section>
+
+<section id="ai" class="page"><div class="ai-shell"><div class="ai-orb-wrap"><button id="orb" class="orb" aria-label="Говорить"><span></span></button><p id="orbStatus">Нажмите на шар и говорите</p></div><div id="chat" class="chat"></div><div class="chat-input"><input id="chatInput" placeholder="Напишите запрос ИИ…"><button id="send">➤</button></div></div></section>
+</main>
+</div>
+<script src="/app.js"></script>
+</body></html>
