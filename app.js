@@ -1060,231 +1060,153 @@ function weatherIcon(
    WEATHER CARD
    ========================================================= */
 
-function renderWeather(weather) {
+function renderWeather(data) {
+    if (!data) {
+        addBubble("ai", "🌦️ Данные о погоде не получены.");
+        return;
+    }
 
-    const city =
-        weather?.name ||
+    console.log("RENDER WEATHER:", data);
+
+    const chat = document.querySelector("#chat");
+
+    if (!chat) {
+        console.error("Chat container #chat not found");
+        return;
+    }
+
+    const weather = data.weather && data.weather[0]
+        ? data.weather[0]
+        : {};
+
+    const main = data.main || {};
+    const wind = data.wind || {};
+    const sys = data.sys || {};
+
+    const placeName =
+        data.name ||
+        data._source?.requested_place ||
         "Текущая точка";
 
-    const country =
-        weather?.sys?.country ||
-        "";
-
     const temperature =
-        Math.round(
-            Number(
-                weather?.main?.temp ?? 0
-            )
-        );
+        Number.isFinite(Number(main.temp))
+            ? Math.round(Number(main.temp))
+            : "—";
 
-    const feels =
-        Math.round(
-            Number(
-                weather?.main?.feels_like ?? 0
-            )
-        );
-
-    const description =
-        weather?.weather?.[0]?.description ||
-        "Нет данных";
+    const feelsLike =
+        Number.isFinite(Number(main.feels_like))
+            ? Math.round(Number(main.feels_like))
+            : "—";
 
     const humidity =
-        weather?.main?.humidity;
-
-    const wind =
-        weather?.wind?.speed;
+        Number.isFinite(Number(main.humidity))
+            ? Math.round(Number(main.humidity))
+            : "—";
 
     const pressure =
-        weather?.main?.pressure;
+        Number.isFinite(Number(main.pressure))
+            ? Math.round(Number(main.pressure))
+            : "—";
 
-    const visibility =
-        weather?.visibility;
+    const windSpeed =
+        Number.isFinite(Number(wind.speed))
+            ? Number(wind.speed).toFixed(1)
+            : "—";
+
+    const description =
+        weather.description ||
+        "Данные о погоде";
 
     const icon =
-        weatherIcon(weather);
+        weather.icon
+            ? "https://openweathermap.org/img/wn/" +
+              weather.icon +
+              "@2x.png"
+            : "";
 
-    const visibilityKm =
-        visibility !== undefined
-            ? (
-                Number(visibility) / 1000
-            ).toFixed(1)
-            : null;
+    const bubble = document.createElement("div");
 
-    addHTMLBubble(`
+    bubble.className = "bubble ai";
 
-        <div class="weather-card">
+    const card = document.createElement("div");
 
-            <div style="
-                display:flex;
-                align-items:center;
-                gap:16px;
-                margin-bottom:16px;
-            ">
+    card.className = "weather-card";
 
-                <div style="
-                    font-size:58px;
-                    line-height:1;
-                ">
-                    ${icon}
-                </div>
+    card.style.padding = "4px";
 
-                <div>
-
-                    <h3 style="
-                        margin:0;
-                        font-size:20px;
-                    ">
-                        ${esc(city)}
-                        ${
-                            country
-                                ? ", " +
-                                  esc(country)
-                                : ""
-                        }
-                    </h3>
-
-                    <div
-                        class="weather-temperature"
-                        style="
-                            margin-top:8px;
-                        "
-                    >
-                        ${temperature}°C
-                    </div>
-
-                </div>
-
-            </div>
-
-            <p style="
-                font-size:16px;
-                text-transform:capitalize;
-            ">
-                ${esc(description)}
-            </p>
-
-            <div style="
-                display:grid;
-                grid-template-columns:
-                    repeat(
-                        auto-fit,
-                        minmax(130px, 1fr)
-                    );
-                gap:10px;
-                margin-top:14px;
-            ">
-
-                <div style="
-                    background:#fff;
-                    border-radius:12px;
-                    padding:12px;
-                ">
-                    <small class="muted">
-                        Ощущается
-                    </small>
-
-                    <br>
-
-                    <b>
-                        ${feels}°C
-                    </b>
-                </div>
-
-                ${
-                    humidity !== undefined
-                        ? `
-                            <div style="
-                                background:#fff;
-                                border-radius:12px;
-                                padding:12px;
-                            ">
-                                <small class="muted">
-                                    Влажность
-                                </small>
-
-                                <br>
-
-                                <b>
-                                    ${humidity}%
-                                </b>
-                            </div>
-                          `
-                        : ""
-                }
-
-                ${
-                    wind !== undefined
-                        ? `
-                            <div style="
-                                background:#fff;
-                                border-radius:12px;
-                                padding:12px;
-                            ">
-                                <small class="muted">
-                                    Ветер
-                                </small>
-
-                                <br>
-
-                                <b>
-                                    ${wind} м/с
-                                </b>
-                            </div>
-                          `
-                        : ""
-                }
-
-                ${
-                    pressure !== undefined
-                        ? `
-                            <div style="
-                                background:#fff;
-                                border-radius:12px;
-                                padding:12px;
-                            ">
-                                <small class="muted">
-                                    Давление
-                                </small>
-
-                                <br>
-
-                                <b>
-                                    ${pressure} гПа
-                                </b>
-                            </div>
-                          `
-                        : ""
-                }
-
-                ${
-                    visibilityKm !== null
-                        ? `
-                            <div style="
-                                background:#fff;
-                                border-radius:12px;
-                                padding:12px;
-                            ">
-                                <small class="muted">
-                                    Видимость
-                                </small>
-
-                                <br>
-
-                                <b>
-                                    ${visibilityKm} км
-                                </b>
-                            </div>
-                          `
-                        : ""
-                }
-
-            </div>
-
+    card.innerHTML = `
+        <div style="
+            font-size:18px;
+            font-weight:700;
+            margin-bottom:8px;
+        ">
+            🌤️ Погода — ${escapeHTML(placeName)}
         </div>
 
-    `);
-}
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:12px;
+            margin-bottom:12px;
+        ">
+            ${
+                icon
+                    ? `<img
+                        src="${icon}"
+                        alt="${escapeHTML(description)}"
+                        style="width:64px;height:64px;"
+                    >`
+                    : ""
+            }
 
+            <div>
+                <div style="
+                    font-size:38px;
+                    font-weight:800;
+                    line-height:1;
+                ">
+                    ${temperature}°C
+                </div>
+
+                <div style="
+                    margin-top:5px;
+                    text-transform:capitalize;
+                ">
+                    ${escapeHTML(description)}
+                </div>
+            </div>
+        </div>
+
+        <div style="
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+            font-size:13px;
+        ">
+            <div>
+                🌡️ Ощущается: ${feelsLike}°C
+            </div>
+
+            <div>
+                💧 Влажность: ${humidity}%
+            </div>
+
+            <div>
+                💨 Ветер: ${windSpeed} м/с
+            </div>
+
+            <div>
+                🧭 Давление: ${pressure} гПа
+            </div>
+        </div>
+    `;
+
+    bubble.appendChild(card);
+
+    chat.appendChild(bubble);
+
+    chat.scrollTop = chat.scrollHeight;
+}
 
 /* =========================================================
    WEATHER REQUEST
