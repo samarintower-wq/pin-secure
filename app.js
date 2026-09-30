@@ -661,220 +661,181 @@ function isImageRequest(text) {
    ========================================================= */
 
 async function generateImage(prompt) {
+    const chat = document.querySelector("#chat");
 
-    addBubble(
-        "user",
-        prompt
-    );
+    // Создаём контейнер сообщения
+    const message = document.createElement("div");
+    message.className = "bubble ai image-message";
 
+    const loading = document.createElement("div");
+    loading.textContent = "🎨 Генерирую изображение…";
+    message.appendChild(loading);
 
-    const loading =
-        addBubble(
-            "ai",
-            "🎨 Создаю изображение…"
-        );
-
+    if (chat) {
+        chat.appendChild(message);
+        chat.scrollTop = chat.scrollHeight;
+    }
 
     try {
-
         const token =
             localStorage.getItem("token") ||
             localStorage.getItem("pin_token");
 
-
         const headers = {
-            "Content-Type":
-                "application/json"
+            "Content-Type": "application/json"
         };
 
-
         if (token) {
-
-            headers["Authorization"] =
-                "Bearer " + token;
+            headers["Authorization"] = "Bearer " + token;
         }
 
+        const response = await fetch("/api/ai/image", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+                prompt: prompt
+            })
+        });
 
-        const response =
-            await fetch(
-                "/api/ai/image",
-                {
-                    method: "POST",
+        let data;
 
-                    headers: headers,
-
-                    body: JSON.stringify({
-                        prompt: prompt
-                    })
-                }
+        try {
+            data = await response.json();
+        } catch (e) {
+            throw new Error(
+                "Сервер вернул некорректный ответ"
             );
+        }
 
-
-        const data =
-            await response.json();
-
-
-        console.log(
-            "IMAGE RESPONSE:",
-            data
-        );
-
+        console.log("IMAGE RESPONSE:", data);
 
         if (!response.ok) {
-
             throw new Error(
                 data.error ||
-                "Ошибка генерации изображения"
+                "Ошибка генерации изображения: HTTP " +
+                response.status
             );
         }
 
-
         if (!data.image) {
-
             throw new Error(
                 "Сервер не вернул изображение"
             );
         }
 
+        let imageSrc = data.image;
 
-        loading.remove();
-
-
-        /*
-         * Создаём сообщение
-         */
-
-        const bubble =
-            document.createElement("div");
-
-        bubble.className =
-            "bubble ai";
-
+        if (typeof imageSrc !== "string") {
+            throw new Error(
+                "Неверный формат изображения"
+            );
+        }
 
         /*
-         * Само изображение
+         * Cloudflare может вернуть чистый Base64.
+         * Превращаем его в полноценный Data URL.
          */
+        if (
+            !imageSrc.startsWith("data:image/") &&
+            !imageSrc.startsWith("http://") &&
+            !imageSrc.startsWith("https://")
+        ) {
+            imageSrc =
+                "data:image/jpeg;base64," +
+                imageSrc;
+        }
 
-        const image =
-            document.createElement("img");
+        // Очищаем сообщение загрузки
+        if (loading && loading.parentNode) {
+            loading.remove();
+        }
 
+        // Создаём изображение
+        const image = document.createElement("img");
 
-        image.alt =
-            prompt;
+        image.alt = data.prompt || prompt || "Сгенерированное изображение";
 
-
-        image.style.display =
-            "block";
-
-        image.style.width =
-            "100%";
-
-        image.style.maxWidth =
-            "700px";
-
-        image.style.height =
-            "auto";
-
-        image.style.borderRadius =
-            "18px";
-
-        image.style.objectFit =
-            "contain";
-
-        image.style.background =
-            "#f0f3f8";
-
-
-        /*
-         * ВАЖНО:
-         *
-         * data.image может быть:
-         *
-         * data:image/png;base64,...
-         *
-         * или обычным URL.
-         */
-
-        image.src =
-            data.image;
-
-
-        /*
-         * Если картинка реально загрузилась
-         */
+        image.style.display = "block";
+        image.style.width = "100%";
+        image.style.maxWidth = "700px";
+        image.style.height = "auto";
+        image.style.borderRadius = "16px";
+        image.style.marginTop = "4px";
 
         image.onload = () => {
+            console.log("IMAGE LOADED");
 
-            console.log(
-                "IMAGE LOADED"
-            );
+            if (chat) {
+                chat.scrollTop = chat.scrollHeight;
+            }
         };
-
-
-        /*
-         * Если браузер не смог
-         * отобразить результат
-         */
 
         image.onerror = () => {
-
             console.error(
                 "IMAGE LOAD ERROR",
-                data.image
-                    ? data.image.substring(
-                        0,
-                        100
-                    )
-                    : null
+                imageSrc.substring(0, 100)
             );
 
-
-            bubble.innerHTML = "";
+            image.remove();
 
             const errorText =
-                document.createElement(
-                    "div"
-                );
+                document.createElement("div");
 
             errorText.textContent =
-                "❌ Изображение получено, но браузер не смог его отобразить.";
+                "❌ Не удалось отобразить сгенерированное изображение.";
 
-            bubble.appendChild(
-                errorText
-            );
+            message.appendChild(errorText);
+
+            if (chat) {
+                chat.scrollTop = chat.scrollHeight;
+            }
         };
 
+        image.src = imageSrc;
 
-        bubble.appendChild(
-            image
-        );
+        message.appendChild(image);
 
+        // Показываем переведённый prompt, если он пришёл
+        if (data.prompt) {
+            const description =
+                document.createElement("div");
 
-        /*
-         * Добавляем в чат
-         */
+            description.style.marginTop = "10px";
+            description.style.opacity = "0.65";
+            description.style.fontSize = "12px";
+            description.textContent =
+                "Prompt: " + data.prompt;
 
-        $("#chat")
-            .appendChild(
-                bubble
-            );
+            message.appendChild(description);
+        }
 
+        if (chat) {
+            chat.scrollTop = chat.scrollHeight;
+        }
 
-        $("#chat").scrollTop =
-            $("#chat").scrollHeight;
-
+        return data;
 
     } catch (error) {
+        console.error("Image error:", error);
 
-        console.error(
-            "Image error:",
-            error
-        );
+        if (loading && loading.parentNode) {
+            loading.remove();
+        }
 
+        const errorText =
+            document.createElement("div");
 
-        loading.textContent =
-            "❌ " +
+        errorText.textContent =
+            "❌ Не удалось создать изображение: " +
             error.message;
+
+        message.appendChild(errorText);
+
+        if (chat) {
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        return null;
     }
 }
 
@@ -1407,16 +1368,14 @@ async function getWeather(city = null, lat = null, lon = null) {
 }
 
 function extractWeatherLocation(text) {
-    let value = text
+    const value = String(text || "")
         .trim()
-        .replace(/[?!]/g, " ");
+        .replace(/[?!]/g, "");
 
     const patterns = [
+        /(?:какая|какой)\s+(?:сейчас\s+)?погод[аыу]\s+(?:в|во|на)\s+(.+)/i,
+
         /(?:погода|температура|прогноз)\s+(?:сейчас\s+)?(?:в|во|на)\s+(.+)/i,
-
-        /(?:какая|какой)\s+(?:сейчас\s+)?погода\s+(?:в|во|на)\s+(.+)/i,
-
-        /(?:погода|температура)\s+(.+)/i,
 
         /(?:weather|forecast)\s+(?:in|at|for)\s+(.+)/i
     ];
@@ -1462,120 +1421,340 @@ function extractCoordinates(text) {
     return { lat, lon };
 }
 
-/* =========================================================
-   NORMAL AI
-   ========================================================= */
 
-async function sendAI(text) {
 
-    text =
-        String(text || "")
-            .trim();
-
-    if (!text) {
-        return;
+async function sendAI(text = null) {
+    // Если текст не передан — берём его из поля ввода
+    if (typeof text !== "string") {
+        const input = document.querySelector("#chatInput");
+        text = input ? input.value.trim() : "";
+    } else {
+        text = text.trim();
     }
 
+    if (!text) return;
+
+    const input = document.querySelector("#chatInput");
+
+    // Очищаем поле ввода
+    if (input) {
+        input.value = "";
+    }
+
+    // Показываем сообщение пользователя
+    addBubble("user", text);
+
+    const lower = text.toLowerCase();
+
     /*
-     * Сначала проверяем запрос изображения.
+     * =========================================================
+     * ПОГОДА
+     * =========================================================
      */
 
     if (
-        isImageRequest(text)
+        /погод|температур|прогноз|weather|forecast/i.test(lower)
     ) {
+        // 1. Сначала проверяем координаты
+        const coordinates = extractCoordinates(text);
 
-        await generateImage(
-            text
-        );
-
-        return;
-    }
-
-    /*
-     * Затем проверяем запрос погоды.
-     */
-
-    if (
-        isWeatherRequest(text)
-    ) {
-
-        await getWeather(
-            text
-        );
-
-        return;
-    }
-
-    /*
-     * Всё остальное отправляем Groq.
-     */
-
-    addBubble(
-        text,
-        "user"
-    );
-
-    $("#chatInput").value = "";
-
-    addHTMLBubble(`
-        <div class="loading">
-            ИИ думает…
-        </div>
-    `);
-
-    const loadingBubble =
-        $("#chat")
-            .querySelector(
-                ".bubble:last-child"
+        if (coordinates) {
+            console.log(
+                "WEATHER COORDINATES:",
+                coordinates
             );
+
+            await getWeather(
+                null,
+                coordinates.lat,
+                coordinates.lon
+            );
+
+            return;
+        }
+
+        // 2. Затем пытаемся определить название места
+        const location = extractWeatherLocation(text);
+
+        if (location) {
+            console.log(
+                "WEATHER LOCATION:",
+                location
+            );
+
+            await getWeather(location);
+
+            return;
+        }
+
+        // 3. Если место не указано —
+        // используем GPS
+        await getWeather();
+
+        return;
+    }
+
+    /*
+     * =========================================================
+     * ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ
+     * =========================================================
+     */
+
+    if (
+        /нарисуй|нарисовать|создай изображение|создай картинку|сгенерируй изображение|сгенерируй картинку|изобрази|draw|generate image|create image/i.test(lower)
+    ) {
+        await generateImage(text);
+        return;
+    }
+
+    /*
+     * =========================================================
+     * Обычный AI-запрос
+     * =========================================================
+     */
 
     try {
+        const token =
+            localStorage.getItem("token") ||
+            localStorage.getItem("pin_token");
 
-        const data =
-            await api(
-                "/ai/chat",
-                {
-                    method: "POST",
+        const headers = {
+            "Content-Type": "application/json"
+        };
 
-                    body: JSON.stringify({
-                        message: text
-                    })
-                }
-            );
-
-        if (loadingBubble) {
-            loadingBubble.remove();
+        if (token) {
+            headers["Authorization"] =
+                "Bearer " + token;
         }
 
-        const answer =
-            data.answer ||
-            "ИИ не вернул ответ.";
+        const response = await fetch(
+            "/api/ai/chat",
+            {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    message: text
+                })
+            }
+        );
+
+        let data;
+
+        try {
+            data = await response.json();
+        } catch (e) {
+            throw new Error(
+                "Сервер вернул некорректный ответ"
+            );
+        }
+
+        console.log(
+            "AI RESPONSE:",
+            data
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "Ошибка AI: HTTP " +
+                response.status
+            );
+        }
+
+        if (!data.answer) {
+            throw new Error(
+                "AI не вернул ответ"
+            );
+        }
+
+        let answer = data.answer;
+
+        /*
+         * =====================================================
+         * ДЕЙСТВИЯ AI
+         * =====================================================
+         */
+
+        if (answer.startsWith("ACTION:")) {
+            const lines = answer.split("\n");
+
+            const actionLine =
+                lines[0].trim();
+
+            const action =
+                actionLine
+                    .replace("ACTION:", "")
+                    .trim();
+
+            const visibleAnswer =
+                lines
+                    .slice(1)
+                    .join("\n")
+                    .trim();
+
+            if (visibleAnswer) {
+                addBubble(
+                    "ai",
+                    visibleAnswer
+                );
+            }
+
+            /*
+             * Открыть Pinmail
+             */
+            if (action === "OPEN_MAIL") {
+                if (
+                    typeof openPage ===
+                    "function"
+                ) {
+                    openPage("mail");
+                }
+
+                return;
+            }
+
+            /*
+             * Открыть Госуслуги
+             */
+            if (action === "OPEN_GOV") {
+                if (
+                    typeof openPage ===
+                    "function"
+                ) {
+                    openPage("gov");
+                }
+
+                return;
+            }
+
+            /*
+             * Создать Pinmail
+             */
+            if (
+                action.startsWith(
+                    "CREATE_MAIL:"
+                )
+            ) {
+                const username =
+                    action
+                        .substring(
+                            "CREATE_MAIL:".length
+                        )
+                        .trim();
+
+                if (!username) {
+                    addBubble(
+                        "ai",
+                        "Не удалось определить имя нового почтового адреса."
+                    );
+
+                    return;
+                }
+
+                try {
+                    const createResponse =
+                        await fetch(
+                            "/api/action/create-mail",
+                            {
+                                method: "POST",
+                                headers: headers,
+                                body: JSON.stringify({
+                                    username:
+                                        username
+                                })
+                            }
+                        );
+
+                    const createData =
+                        await createResponse.json();
+
+                    if (
+                        !createResponse.ok
+                    ) {
+                        throw new Error(
+                            createData.error ||
+                            "Не удалось создать почту"
+                        );
+                    }
+
+                    addBubble(
+                        "ai",
+                        "✉️ Почтовый адрес создан: " +
+                        createData.mailbox.address
+                    );
+
+                    if (
+                        typeof openPage ===
+                        "function"
+                    ) {
+                        openPage("mail");
+                    }
+
+                    if (
+                        typeof loadMailboxes ===
+                        "function"
+                    ) {
+                        await loadMailboxes();
+                    }
+
+                } catch (error) {
+                    console.error(
+                        "CREATE_MAIL:",
+                        error
+                    );
+
+                    addBubble(
+                        "ai",
+                        "❌ Не удалось создать почтовый адрес: " +
+                        error.message
+                    );
+                }
+
+                return;
+            }
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * Обычный ответ
+         * =====================================================
+         */
 
         addBubble(
-            answer,
-            "ai"
-        );
-
-        handleAction(
+            "ai",
             answer
         );
 
-        speak(
-            answer
-        );
+        /*
+         * Озвучивание ответа
+         */
+        if (
+            typeof speak ===
+            "function"
+        ) {
+            try {
+                speak(answer);
+            } catch (error) {
+                console.warn(
+                    "Speech error:",
+                    error
+                );
+            }
+        }
 
     } catch (error) {
-
-        if (loadingBubble) {
-            loadingBubble.remove();
-        }
-
-        addBubble(
-            "Ошибка: " +
-            error.message,
-            "ai"
+        console.error(
+            "AI error:",
+            error
         );
 
+        addBubble(
+            "ai",
+            "❌ Не удалось получить ответ: " +
+            error.message
+        );
     }
 }
 
